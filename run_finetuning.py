@@ -379,7 +379,7 @@ if __name__ == '__main__':
     # initialize trainer
     optional_kwargs = {}
     if args.max_steps:
-        optional_kwargs.update({"max_steps", args.max_steps})
+        optional_kwargs.update({"max_steps": args.max_steps})
     if args.eval_steps:
         optional_kwargs.update({"eval_steps": args.eval_steps})
     if args.save_steps:
