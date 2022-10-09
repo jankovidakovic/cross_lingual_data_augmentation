@@ -101,9 +101,9 @@ def get_parser():
     )
     parser.add_argument(
         "--num_train_epochs",
-        default=3,
+        default=None,
         type=int,
-        help="Total number of training epochs to perform. Defaults to 3.",
+        help="Total number of training epochs to perform. Defaults to None.",  # TODO
     )
     parser.add_argument(
         "--max_steps",
@@ -384,6 +384,8 @@ if __name__ == '__main__':
         optional_kwargs.update({"eval_steps": args.eval_steps})
     if args.save_steps:
         optional_kwargs.update({"save_steps": args.save_steps})
+    if args.num_train_epochs:
+        optional_kwargs.update({"num_train_epochs": args.num_train_epochs})
     training_args = TrainingArguments(
         output_dir=args.output_dir,
         evaluation_strategy=IntervalStrategy.STEPS if args.eval_steps else IntervalStrategy.EPOCH,
@@ -393,7 +395,6 @@ if __name__ == '__main__':
         max_grad_norm=args.max_grad_norm,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
-        num_train_epochs=args.num_train_epochs,
         lr_scheduler_type=args.lr_scheduler_type,
         warmup_ratio=args.warmup_ratio,
         logging_strategy=IntervalStrategy.STEPS,
