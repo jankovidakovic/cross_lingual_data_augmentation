@@ -418,4 +418,7 @@ if __name__ == '__main__':
     )
     trainer.train()
     logging.info(f"Training complete.")
+
+    # best model should be loaded, evaluate it for last checkpoint
+    trainer.evaluate()
     wandb_run.finish()
