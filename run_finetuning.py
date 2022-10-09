@@ -380,9 +380,11 @@ if __name__ == '__main__':
     optional_kwargs = {}
     if args.max_steps:
         optional_kwargs.update({"max_steps", args.max_steps})
+    if args.eval_steps:
+        optional_kwargs.update({"eval_steps": args.eval_steps})
     training_args = TrainingArguments(
         output_dir=args.output_dir,
-        evaluation_strategy=IntervalStrategy.STEPS if args.max_steps else IntervalStrategy.EPOCH,
+        evaluation_strategy=IntervalStrategy.STEPS if args.eval_steps else IntervalStrategy.EPOCH,
         per_device_train_batch_size=args.per_device_train_batch_size,
         per_device_eval_batch_size=args.per_device_eval_batch_size,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
@@ -394,10 +396,8 @@ if __name__ == '__main__':
         warmup_ratio=args.warmup_ratio,
         logging_strategy=IntervalStrategy.STEPS,
         logging_steps=args.logging_steps,
-        # logging_nan_inf_filter=False,
-        save_strategy=IntervalStrategy.STEPS if args.max_steps else IntervalStrategy.EPOCH,
+        save_strategy=IntervalStrategy.STEPS,
         save_total_limit=args.save_total_limit,
-        eval_steps=args.eval_steps,
         dataloader_num_workers=args.dataloader_num_workers,
         run_name=args.wandb_run,
         load_best_model_at_end=True,
