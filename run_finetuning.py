@@ -208,8 +208,8 @@ def get_parser():
     parser.add_argument(
         "--save_steps",
         type=int,
-        default=50,
-        help="Saving interval in steps. Defaults to 50.",
+        default=None,
+        help="Saving interval in steps. Defaults to None.",
     )
     parser.add_argument(
         "--save_total_limit",
@@ -382,6 +382,8 @@ if __name__ == '__main__':
         optional_kwargs.update({"max_steps", args.max_steps})
     if args.eval_steps:
         optional_kwargs.update({"eval_steps": args.eval_steps})
+    if args.save_steps:
+        optional_kwargs.update({"save_steps": args.save_steps})
     training_args = TrainingArguments(
         output_dir=args.output_dir,
         evaluation_strategy=IntervalStrategy.STEPS if args.eval_steps else IntervalStrategy.EPOCH,
@@ -396,7 +398,7 @@ if __name__ == '__main__':
         warmup_ratio=args.warmup_ratio,
         logging_strategy=IntervalStrategy.STEPS,
         logging_steps=args.logging_steps,
-        save_strategy=IntervalStrategy.STEPS,
+        save_strategy=IntervalStrategy.STEPS if args.save_steps else IntervalStrategy.EPOCH,
         save_total_limit=args.save_total_limit,
         dataloader_num_workers=args.dataloader_num_workers,
         run_name=args.wandb_run,
