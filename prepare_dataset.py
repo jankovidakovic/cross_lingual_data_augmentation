@@ -132,6 +132,7 @@ def main():
     for i, (split_name, split_size) in enumerate(zip(args.output_files[:-1], args.split_sizes)):
         split_df, df = train_test_split(
             df, train_size=split_size / sum(args.split_sizes[i:]))
+        # TODO - stratified split  (ensure that all labels are present in all splits)
         process_split(
             split_df=split_df,
             split_name=split_name,

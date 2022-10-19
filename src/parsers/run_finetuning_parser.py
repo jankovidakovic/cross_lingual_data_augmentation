@@ -166,7 +166,7 @@ def get_parser():
     )
     parser.add_argument(
         "--max_grad_norm",
-        default=1.0,
+        default=None,
         type=float,
         help="Maximum value of L2-norm of the gradients during optimization. Gradients "
              "with norm greater than this value will be clipped. Defaults to 1.0."

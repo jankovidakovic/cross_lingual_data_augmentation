@@ -61,8 +61,8 @@ if __name__ == '__main__':
             f"Cuda is not available. This is probably not intended, stopping the run...")
         raise RuntimeWarning(f"Cuda is not available. Exiting.")
 
-    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-    os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(args.gpus)
+    # os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    # os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(args.gpus)
     logging.info(f"Using CUDA devices: {args.gpus}")
 
     # setup config, tokenizer and model
@@ -121,13 +121,14 @@ if __name__ == '__main__':
         optional_kwargs.update({"save_steps": args.save_steps})
     if args.num_train_epochs:
         optional_kwargs.update({"num_train_epochs": args.num_train_epochs})
+    if args.max_grad_norm:
+        optional_kwargs.update({"max_grad_norm": args.max_grad_norm})
     training_args = TrainingArguments(
         output_dir=args.output_dir,
         evaluation_strategy=IntervalStrategy.STEPS if args.eval_steps else IntervalStrategy.EPOCH,
         per_device_train_batch_size=args.per_device_train_batch_size,
         per_device_eval_batch_size=args.per_device_eval_batch_size,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
-        max_grad_norm=args.max_grad_norm,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
         lr_scheduler_type=args.lr_scheduler_type,
