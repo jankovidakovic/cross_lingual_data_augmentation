@@ -3,8 +3,17 @@ from typing import Generic, Callable, Optional
 
 import pandas as pd
 from torch.utils.data import Dataset
-from transformers import BertConfig, BertForSequenceClassification, BertTokenizer, RobertaConfig, \
-    RobertaForSequenceClassification, RobertaTokenizer
+from transformers import (
+    BertConfig,
+    BertForSequenceClassification,
+    BertTokenizer,
+    RobertaConfig,
+    RobertaForSequenceClassification,
+    RobertaTokenizer,
+    XLMRobertaConfig,
+    XLMRobertaForSequenceClassification,
+    XLMRobertaTokenizer
+)
 
 from src.data import DoceeDataset
 from src.types import ModelConfigType, TokenizerType, ModelType
@@ -29,6 +38,11 @@ MODEL_CLASSES: dict[str, ModelClass] = {
         config=RobertaConfig,
         tokenizer=RobertaTokenizer,
         model=RobertaForSequenceClassification,
+    ),
+    "xlm-r": ModelClass(
+        config=XLMRobertaConfig,
+        tokenizer=XLMRobertaTokenizer,
+        model=XLMRobertaForSequenceClassification
     )
     # TODO - add more models
 }

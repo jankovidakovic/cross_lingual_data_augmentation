@@ -94,22 +94,41 @@ if __name__ == '__main__':
             f"Train filename provided ('{args.train_filename}') not found.")
         raise RuntimeError(
             f"Train filename provided ('{args.train_filename}') not found.")
-    # create dataset from train filename
-    train_df = pd.read_csv(args.train_filename)
-    dataset_init = DATASET_INITS[args.dataset_type]
-    # TODO - fix optional in callable
-    train_dataset = dataset_init(train_df, tokenizer, None)
-    logging.info(f"Labels mapped to IDs: {pformat(train_dataset.label2id)}")
-    # create dev dataset if provided
+
     if not os.path.exists(args.dev_filename):
         logging.error(
             f"Dev filename provided ('{args.dev_filename}') not found.")
         raise RuntimeError(
             f"Dev filename provided ('{args.dev_filename}') not found.")
+
+    if args.test_filename and not os.path.exists(args.test_filename):
+        logging.error(
+            f"Test filename provided ('{args.test_filename}') not found.")
+        raise RuntimeError(
+            f"Test filename provided ('{args.test_filename}') not found.")
+
+    # create dataset from train filename
+    dataset_init = DATASET_INITS[args.dataset_type]
+
+    train_df = pd.read_csv(args.train_filename)
+    logging.info(f"Loaded {len(train_df)} train examples.")
+    logging.info(f"Train examples: {pformat(train_df.head())}")
+    # TODO - fix optional in callable
+    train_dataset = dataset_init(train_df, tokenizer, None)
+    logging.info(f"Labels mapped to IDs: {pformat(train_dataset.label2id)}")
+    # create dev dataset if provided
     # create dataset from dev filename
     dev_df = pd.read_csv(args.dev_filename)
+    logging.info(f"Loaded {len(dev_df)} dev examples.")
+    logging.info(f"Dev examples: {pformat(dev_df.head())}")
     # TODO - fix static typing
     dev_dataset = dataset_init(dev_df, tokenizer, train_dataset.label2id)
+
+    if args.test_filename:
+        test_df = pd.read_csv(args.test_filename)
+        logging.info(f"Loaded {len(test_df)} test examples.")
+        logging.info(f"Test examples: {pformat(test_df.head())}")
+        test_dataset = dataset_init(test_df, tokenizer, train_dataset.label2id)
 
     # initialize trainer
     optional_kwargs = {}
@@ -154,8 +173,11 @@ if __name__ == '__main__':
         compute_metrics=multiclass_cls_metrics
     )
     trainer.train()
-    logging.info(f"Training complete.")
+    logging.info("Training complete.")
 
     # best model should be loaded, evaluate it for last checkpoint
-    trainer.evaluate()
+    trainer.evaluate(
+        eval_dataset=test_dataset if args.test_filename else dev_dataset,
+        metric_key_prefix="test" if args.test_filename else "eval_final"
+    )
     wandb_run.finish()
