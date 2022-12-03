@@ -15,7 +15,7 @@ from transformers import (
     XLMRobertaTokenizer
 )
 
-from src.data import DoceeDataset
+from src.data import Docee
 from src.types import ModelConfigType, TokenizerType, ModelType
 
 
@@ -48,5 +48,5 @@ MODEL_CLASSES: dict[str, ModelClass] = {
 }
 
 DATASET_INITS: dict[str, Callable[[pd.DataFrame, TokenizerType, Optional[dict[str, int]]], Dataset]] = {
-    "docee": DoceeDataset
+    "docee": Docee
 }
