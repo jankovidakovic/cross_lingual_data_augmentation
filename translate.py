@@ -5,6 +5,7 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 import logging
 from enum import Enum
 from typing import Generator, Callable
+from pprint import pprint
 
 import pandas as pd
 from deep_translator import GoogleTranslator
@@ -117,10 +118,10 @@ class LongDocumentStrategy(Enum):
 
 
 def translation_pipeline(
-    long_document_strategy: (
+    long_document_strategy: tuple[
         Callable[[str], Generator[str, None, None]],
         Callable[[Generator[str, None, None]], str]
-    ),
+    ],
     translator
 ) -> str:
     generate_splits, join_splits = long_document_strategy
@@ -177,11 +178,12 @@ def main():
         for field in args.fields_to_translate:
             logging.info(f"Translating field '{field}'")
             # create a translation pipeline
-            df[field] = df[field].progress_apply(pipeline)  # does this work?
+            df.loc[:, field] = df[field].progress_apply(pipeline)  # does this work?
             # somethings broken here
             logging.info(f"Translated field '{field}'")
 
     # save the translated dataset to csv file
+    logging.info(pprint(df.head()))
     df.to_csv(args.output_file, index=False)
     logging.info(f"Saved translated dataset to '{args.output_file}'")
 
