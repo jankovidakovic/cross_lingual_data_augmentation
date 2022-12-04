@@ -46,6 +46,25 @@ def get_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="If set, logging level will be set to info."
     )
+    parser.add_argument(
+        "--min_length",
+        type=int,
+        default=20,
+        help="Minimum summarization length. Defaults to 20."
+    )
+    parser.add_argument(
+        "--max_length",
+        type=int,
+        default=100,
+        help="Maximum summarization length. Defaults to 100."
+    )
+    parser.add_argument(
+        "--num_beams",
+        type=int,
+        default=4,
+        help="Number of beams to use for beam search. Defaults to 4."
+             "Setting this value to 1 means no beam search."
+    )
     return parser
 
 
@@ -80,12 +99,12 @@ def main():
     def summarize_text(text: str) -> str:
         return summarizer(
             text,
-            min_length=20,
-            max_length=200,
-            num_beams=10,
+            min_length=args.min_length,
+            max_length=args.max_length,
+            num_beams=args.num_beams,
             do_sample=False,
             truncation=True,
-        )[0]["summary_text"]
+        )[0]["summary_text"]  # I guess this is the same for all models?
 
     summary_df = df.loc[:, ["text", "event_type"]]
     tqdm.pandas()
@@ -96,7 +115,7 @@ def main():
     logging.info(pprint(df_to_save.head()))
     logging.info(f"Columns: {df_to_save.columns}")
 
-    summary_df.to_csv(args.output_path)
+    df_to_save.to_csv(args.output_path, index=False)
 
 
 if __name__ == '__main__':
