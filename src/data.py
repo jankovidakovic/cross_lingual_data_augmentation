@@ -1,6 +1,6 @@
 import logging
-from dataclasses import dataclass
-from typing import Optional, Sequence, Generator
+from dataclasses import dataclass, field
+from typing import Optional, Sequence, Generator, Callable
 
 import pandas as pd
 from torch.utils.data import Dataset
@@ -106,3 +106,12 @@ class DoceeWithArguments(Docee):
     def __getitem__(self, idx):
         batch_encoding = super().__getitem__(idx)
         # add argument information
+
+
+@dataclass
+class NewsWikiSplit:
+    news: pd.DataFrame = field(kw_only=True)
+    wiki: pd.DataFrame = field(kw_only=True)
+
+    def map(self, f: Callable[[pd.DataFrame], pd.DataFrame]):
+        return NewsWikiSplit(news=f(self.news), wiki=f(self.wiki))
