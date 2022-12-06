@@ -35,21 +35,6 @@ def get_parser() -> ArgumentParser:
              "name of a model which is available in Huggingface Model Hub."
     )
     parser.add_argument(
-        "--config_name",
-        type=str,
-        default=None,
-        help="Pretrained config name or path. If not provided, will default to "
-             "value of '--pretrained_model_name_or_path'.",
-    )
-    parser.add_argument(
-        "--tokenizer_name",
-        default=None,
-        type=str,
-        help="Pretrained tokenizer name or path. If not provided, will default to "
-             "value of '--pretrained_model_name_or_path'.",
-    )
-
-    parser.add_argument(
         "--test_filename",
         type=str,
         required=True,
@@ -95,12 +80,6 @@ def get_parser() -> ArgumentParser:
         type=str,
         required=True,
         help="The output path to which the classification report will be written"
-    )
-    parser.add_argument(
-        "--cache_dir",
-        default="",
-        type=str,
-        help="Path to a directory containing cached models (downloaded from hub)."
     )
 
     # runtime meta args
@@ -172,8 +151,7 @@ def main():
     #     cache_dir=args.cache_dir,
     # )  # do we even need this?
     tokenizer = model_type.tokenizer.from_pretrained(
-        pretrained_model_name_or_path=args.tokenizer_name or args.pretrained_model_name_or_path,
-        cache_dir=args.cache_dir,
+        pretrained_model_name_or_path=args.pretrained_model_name_or_path,
         do_lower_case=args.do_lower_case
     )
     model = model_type.model.from_pretrained(
