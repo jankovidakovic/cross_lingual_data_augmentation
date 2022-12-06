@@ -8,6 +8,7 @@ from sklearn.model_selection import train_test_split
 import numpy as np
 
 
+# TODO - add stratification
 def get_parser():
     parser = ArgumentParser()
     parser.add_argument(
@@ -32,7 +33,7 @@ def get_parser():
         type=str,
         nargs="+",
         help="Names of output files. Each file represents one split. "
-        " For each split, exactly one file name should be given."
+             " For each split, exactly one file name should be given."
     )
     parser.add_argument(
         "--split_sizes",
@@ -77,10 +78,10 @@ def validate_args(args: Namespace) -> None:
 
 
 def process_split(
-    split_df: pd.DataFrame,
-    split_name: str,
-    split_no: int,
-    split_filename: str
+        split_df: pd.DataFrame,
+        split_name: str,
+        split_no: int,
+        split_filename: str
 ) -> None:
     logging.info(
         f"Split no. {split_no} (named {split_name}): "
@@ -137,14 +138,14 @@ def main():
             split_df=split_df,
             split_name=split_name,
             split_no=i,
-            split_filename=os.path.join(split_path, f"{split_name}.csv")
+            split_filename=os.path.join(split_path, split_name)
         )
 
     process_split(
         split_df=df,
         split_name=args.output_files[-1],
         split_no=len(args.split_sizes) - 1,
-        split_filename=os.path.join(split_path, f"{args.output_files[-1]}.csv")
+        split_filename=os.path.join(split_path, args.output_files[-1])
     )
 
     logging.info("Splitting complete.")
