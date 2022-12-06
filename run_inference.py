@@ -200,8 +200,8 @@ def main():
         model=model,
         tokenizer=tokenizer,
         device=args.device,
-        num_workers=args.dataloader_num_workers,
-        batch_size=args.per_device_eval_batch_size,
+        # num_workers=args.dataloader_num_workers,
+        # batch_size=args.per_device_eval_batch_size,
         framework="pt",
         truncation=True
     )
