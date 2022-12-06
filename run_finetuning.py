@@ -68,24 +68,16 @@ if __name__ == '__main__':
     # setup config, tokenizer and model
     model_type = MODEL_CLASSES[args.model_type]
     logging.info(f"Using model type: {args.model_type}")
-    config = model_type.config.from_pretrained(
-        pretrained_model_name_or_path=args.config_name or args.pretrained_model_name_or_path,
-        cache_dir=args.cache_dir,
-        num_labels=args.num_labels
-    )
+    # config = model_type.config.from_pretrained(
+    #     pretrained_model_name_or_path=args.config_name or args.pretrained_model_name_or_path,
+    #     cache_dir=args.cache_dir,
+    #     num_labels=args.num_labels
+    # )
     tokenizer = model_type.tokenizer.from_pretrained(
         pretrained_model_name_or_path=args.tokenizer_name or args.pretrained_model_name_or_path,
         cache_dir=args.cache_dir,
         do_lower_case=args.do_lower_case
     )
-    model = model_type.model.from_pretrained(
-        pretrained_model_name_or_path=args.pretrained_model_name_or_path,
-        cache_dir=args.cache_dir,
-        num_labels=args.num_labels
-    )
-    print("========== MODEL ARCHITECTURE ==========")
-    print(model)
-
     # setup datasets
 
     # check that the filesystem info about the data is correct
@@ -96,10 +88,15 @@ if __name__ == '__main__':
             f"Train filename provided ('{args.train_filename}') not found.")
     # create dataset from train filename
     train_df = pd.read_csv(args.train_filename)
+    label2id = {
+        label: i
+        for i, label in enumerate(sorted(train_df.event_type.unique().tolist()))
+    }
+    logging.info(f"Labels mapped to IDs: {pformat(label2id)}")
+
     dataset_init = DATASET_INITS[args.dataset_type]
     # TODO - fix optional in callable
-    train_dataset = dataset_init(train_df, tokenizer, None)
-    logging.info(f"Labels mapped to IDs: {pformat(train_dataset.label2id)}")
+    train_dataset = dataset_init(train_df, tokenizer, label2id)
     # create dev dataset if provided
     if not os.path.exists(args.dev_filename):
         logging.error(
@@ -109,7 +106,18 @@ if __name__ == '__main__':
     # create dataset from dev filename
     dev_df = pd.read_csv(args.dev_filename)
     # TODO - fix static typing
-    dev_dataset = dataset_init(dev_df, tokenizer, train_dataset.label2id)
+    dev_dataset = dataset_init(dev_df, tokenizer, label2id)
+
+    # load model
+
+    model = model_type.model.from_pretrained(
+        pretrained_model_name_or_path=args.pretrained_model_name_or_path,
+        cache_dir=args.cache_dir,
+        label2id=label2id
+    )
+    print("========== MODEL ARCHITECTURE ==========")
+    print(model)
+
 
     # initialize trainer
     optional_kwargs = {}
