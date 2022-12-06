@@ -167,11 +167,10 @@ def main():
     model_type = MODEL_CLASSES[args.model_type]
     logger.info(f"Using model type: {args.model_type}")
 
-    config = model_type.config.from_pretrained(
-        pretrained_model_name_or_path=args.config_name or args.pretrained_model_name_or_path,
-        cache_dir=args.cache_dir,
-        num_labels=args.num_labels
-    )  # do we even need this?
+    # config = model_type.config.from_pretrained(
+    #     pretrained_model_name_or_path=args.config_name or args.pretrained_model_name_or_path,
+    #     cache_dir=args.cache_dir,
+    # )  # do we even need this?
     tokenizer = model_type.tokenizer.from_pretrained(
         pretrained_model_name_or_path=args.tokenizer_name or args.pretrained_model_name_or_path,
         cache_dir=args.cache_dir,
@@ -180,7 +179,6 @@ def main():
     model = model_type.model.from_pretrained(
         pretrained_model_name_or_path=args.pretrained_model_name_or_path,
         cache_dir=args.cache_dir,
-        num_labels=args.num_labels,  # doesnt the model know num_labels since it was saved that way?
     )
 
     if args.test_filename and not os.path.exists(args.test_filename):
