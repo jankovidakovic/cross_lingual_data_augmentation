@@ -22,14 +22,6 @@ def get_parser():
              "training. Relative paths should work, but should be used with caution."
     )
     parser.add_argument(
-        "--test_filename",
-        type=str,
-        required=False,
-        help="Filesystem path to a file containing the test set. If "
-        "provided, model will be evaluated on the test set after "
-        "the training is complete."
-    )
-    parser.add_argument(
         "--num_labels",
         type=int,
         default=None,

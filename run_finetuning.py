@@ -89,12 +89,6 @@ if __name__ == '__main__':
         raise RuntimeError(
             f"Dev filename provided ('{args.dev_filename}') not found.")
 
-    if args.test_filename and not os.path.exists(args.test_filename):
-        logging.error(
-            f"Test filename provided ('{args.test_filename}') not found.")
-        raise RuntimeError(
-            f"Test filename provided ('{args.test_filename}') not found.")
-
     # create dataset from train filename
     dataset_init = DATASET_INITS[args.dataset_type]
 
@@ -111,12 +105,6 @@ if __name__ == '__main__':
     logging.info(f"Dev examples: {pformat(dev_df.head())}")
     # TODO - fix static typing
     dev_dataset = dataset_init(dev_df, tokenizer, train_dataset.label2id)
-
-    if args.test_filename:
-        test_df = pd.read_csv(args.test_filename)
-        logging.info(f"Loaded {len(test_df)} test examples.")
-        logging.info(f"Test examples: {pformat(test_df.head())}")
-        test_dataset = dataset_init(test_df, tokenizer, train_dataset.label2id)
 
     # setup config and model
     logging.info(f"Using model type: {args.model_type}")
@@ -182,7 +170,8 @@ if __name__ == '__main__':
 
     # best model should be loaded, evaluate it for last checkpoint
     trainer.evaluate(
-        eval_dataset=test_dataset if args.test_filename else dev_dataset,
-        metric_key_prefix="test" if args.test_filename else "eval_final"
+        eval_dataset=dev_dataset,
+        metric_key_prefix="eval_final"
     )
+
     wandb_run.finish()
