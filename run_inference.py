@@ -161,7 +161,7 @@ def main():
     #     name=args.wandb_run
     # )
 
-    logger.info(f"Using CUDA devices: {args.gpus}")
+    logger.info(f"Using CUDA devices: {args.device}")
 
     # setup config, tokenizer and model
     model_type = MODEL_CLASSES[args.model_type]
