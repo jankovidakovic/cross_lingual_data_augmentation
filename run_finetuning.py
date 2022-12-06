@@ -67,24 +67,12 @@ if __name__ == '__main__':
 
     # setup config, tokenizer and model
     model_type = MODEL_CLASSES[args.model_type]
-    logging.info(f"Using model type: {args.model_type}")
-    config = model_type.config.from_pretrained(
-        pretrained_model_name_or_path=args.config_name or args.pretrained_model_name_or_path,
-        cache_dir=args.cache_dir,
-        num_labels=args.num_labels
-    )
     tokenizer = model_type.tokenizer.from_pretrained(
         pretrained_model_name_or_path=args.tokenizer_name or args.pretrained_model_name_or_path,
         cache_dir=args.cache_dir,
         do_lower_case=args.do_lower_case
     )
-    model = model_type.model.from_pretrained(
-        pretrained_model_name_or_path=args.pretrained_model_name_or_path,
-        cache_dir=args.cache_dir,
-        num_labels=args.num_labels
-    )
-    print("========== MODEL ARCHITECTURE ==========")
-    print(model)
+
 
     # setup datasets
 
@@ -129,6 +117,23 @@ if __name__ == '__main__':
         logging.info(f"Loaded {len(test_df)} test examples.")
         logging.info(f"Test examples: {pformat(test_df.head())}")
         test_dataset = dataset_init(test_df, tokenizer, train_dataset.label2id)
+
+    # setup config and model
+    logging.info(f"Using model type: {args.model_type}")
+    config = model_type.config.from_pretrained(
+        pretrained_model_name_or_path=args.config_name or args.pretrained_model_name_or_path,
+        cache_dir=args.cache_dir,
+        num_labels=args.num_labels,
+        label2id=train_dataset.label2id
+    )
+    model = model_type.model.from_pretrained(
+        pretrained_model_name_or_path=args.pretrained_model_name_or_path,
+        cache_dir=args.cache_dir,
+        num_labels=args.num_labels,
+        label2id=train_dataset.label2id
+    )
+    print("========== MODEL ARCHITECTURE ==========")
+    print(model)
 
     # initialize trainer
     optional_kwargs = {}
