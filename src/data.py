@@ -52,7 +52,9 @@ class Docee(Dataset):
         self.labels: list[str] = df.event_type.tolist()
 
         # map labels to IDs
-        self.label2id: dict[str, int] = label2id or {label: i for i, label in enumerate(df.event_type.unique())}
+        self.label2id: dict[str, int] = label2id or {
+            label: i
+            for i, label in enumerate(sorted(df.event_type.unique()))}
         self.length = len(self.text)
 
         self.fields = ["text", "labels"]  # shouldn't this be label?
