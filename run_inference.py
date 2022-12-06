@@ -216,7 +216,7 @@ def main():
     # expected_output = map(label2id.__getitem__, df.event_type.tolist())  # those are textual labels
     tqdm.pandas()
     df.loc[:, "y_pred"] = df["text"].progress_apply(
-        lambda text: int(inference(text)["label"].split("_")[1])
+        lambda text: int(inference(text)[0]["label"].split("_")[1])
     )
 
     cls_metrics = classification_report(
