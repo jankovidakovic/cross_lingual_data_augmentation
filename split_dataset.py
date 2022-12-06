@@ -42,6 +42,11 @@ def get_parser():
         help="Split sizes. Must sum to 1.0"
     )
     parser.add_argument(
+        "--stratify",
+        action="store_true",
+        help="If set, the splitting will be stratified."
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="If set, logging level will be set to info."
@@ -132,7 +137,10 @@ def main():
     # split
     for i, (split_name, split_size) in enumerate(zip(args.output_files[:-1], args.split_sizes)):
         split_df, df = train_test_split(
-            df, train_size=split_size / sum(args.split_sizes[i:]))
+            df,
+            train_size=split_size / sum(args.split_sizes[i:]),
+            stratify=df.event_type.tolist() if args.stratify else None
+        )
         # TODO - stratified split  (ensure that all labels are present in all splits)
         process_split(
             split_df=split_df,
