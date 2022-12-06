@@ -113,6 +113,7 @@ if __name__ == '__main__':
     model = model_type.model.from_pretrained(
         pretrained_model_name_or_path=args.pretrained_model_name_or_path,
         cache_dir=args.cache_dir,
+        num_labels=args.num_labels,
         label2id=label2id
     )
     print("========== MODEL ARCHITECTURE ==========")
