@@ -220,8 +220,8 @@ def main():
     )
 
     cls_metrics = classification_report(
-        map(label2id.__getitem__, df.event_type.tolist()),
-        df.y_pred,
+        list(map(label2id.__getitem__, df.event_type.tolist())),
+        df.y_pred.tolist(),
         target_names=label_names,
         output_dict=True
     )
