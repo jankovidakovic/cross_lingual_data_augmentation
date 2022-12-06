@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from argparse import ArgumentParser
@@ -90,11 +91,10 @@ def get_parser() -> ArgumentParser:
     # )
 
     parser.add_argument(
-        "--output_dir",
+        "--output_path",
         type=str,
         required=True,
-        help="The output directory where the model predictions and "
-             "checkpoints will be written."
+        help="The output path to which the classification report will be written"
     )
     parser.add_argument(
         "--cache_dir",
@@ -229,8 +229,8 @@ def main():
     pprint(cls_metrics)
 
     # save cls_metrics to a file
-    with open(os.path.join(args.output_dir, f"model__{args.pretrained_model_name_or_path}__dataset__{args.test_filename}"), "w") as f:
-        f.write(pformat(cls_metrics))
+    with open(args.output_path, "w") as f:
+        json.dump(cls_metrics, f)
 
 
 if __name__ == '__main__':
