@@ -5,8 +5,10 @@ from pprint import pformat
 
 import pandas as pd
 import torch.cuda
+from transformers.utils import PaddingStrategy
+
 import wandb
-from transformers import TrainingArguments, IntervalStrategy, Trainer
+from transformers import TrainingArguments, IntervalStrategy, Trainer, DataCollatorWithPadding
 
 from src.utils import multiclass_cls_metrics
 from src.parsers.run_finetuning_parser import get_parser
@@ -157,12 +159,19 @@ if __name__ == '__main__':
         report_to=["wandb"],
         **optional_kwargs
     )
+    data_collator = DataCollatorWithPadding(
+        tokenizer=tokenizer,
+        padding=PaddingStrategy.MAX_LENGTH,
+        max_length=args.max_seq_length,
+        return_tensors="pt"
+    )  # I guess we pad here then
     trainer = Trainer(
         args=training_args,
         model=model,
         tokenizer=tokenizer,
         train_dataset=train_dataset,
         eval_dataset=dev_dataset,
+        data_collator=data_collator,
         compute_metrics=multiclass_cls_metrics
     )
     trainer.train()
