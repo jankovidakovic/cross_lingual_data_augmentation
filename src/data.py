@@ -54,10 +54,10 @@ class Docee(Dataset):
         # map labels to IDs
         self.label2id: dict[str, int] = label2id or {
             label: i
-            for i, label in enumerate(sorted(df.event_type.unique()))}
+            for i, label in enumerate(sorted(df.event_type.unique().tolist()))}
         self.length = len(self.text)
 
-        self.fields = ["text", "labels"]  # shouldn't this be label?
+        self.fields = ["text", "labels"]  # shouldn't this be label?  # where is this even used
         self.return_tensors = return_tensors
         # TODO - don't pass tokenizer, simply pass a partially applied encoding function
 
