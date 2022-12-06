@@ -155,8 +155,7 @@ def main():
         do_lower_case=args.do_lower_case
     )
     model = model_type.model.from_pretrained(
-        pretrained_model_name_or_path=args.pretrained_model_name_or_path,
-        cache_dir=args.cache_dir,
+        pretrained_model_name_or_path=args.pretrained_model_name_or_path
     )
 
     if args.test_filename and not os.path.exists(args.test_filename):
