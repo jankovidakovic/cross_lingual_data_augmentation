@@ -1,5 +1,6 @@
 import logging
 from dataclasses import dataclass, field
+from pprint import pformat
 from typing import Optional, Sequence, Generator, Callable
 
 import pandas as pd
@@ -82,6 +83,7 @@ class Docee(Dataset):
         )
         label = self.label2id[self.labels[idx]]
         batch_encoding["labels"] = label
+        logging.info(f"Got item: {pformat(batch_encoding)}")
         return batch_encoding
         # return self.text[idx], self.labels[idx]
         # we could probably tokenize this, right?
