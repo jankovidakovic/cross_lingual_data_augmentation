@@ -115,7 +115,7 @@ def timeit(func):
 
 
 @timeit
-def do_inference(batch_size: int, pipeline, dataset):
+def do_inference(batch_size: int, pipeline, dataset, num_workers: int = 4):
     # Without batch size:
     outs = [out[0]["summary_text"] for out in tqdm(pipeline(
         dataset,
@@ -123,6 +123,6 @@ def do_inference(batch_size: int, pipeline, dataset):
         max_length=200,
         truncation=True,
         batch_size=batch_size,
-        num_workers=4
+        num_workers=num_workers
     ), desc=f"Inference with BS={batch_size}", total=len(dataset))]
     return outs
