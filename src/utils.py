@@ -1,6 +1,6 @@
 import time
 from functools import wraps
-from typing import Tuple
+from typing import Tuple, Generator, Any
 
 import numpy as np
 import pandas as pd
@@ -134,3 +134,11 @@ def do_inference(batch_size: int, pipeline, dataset, num_workers: int = 4):
         num_workers=num_workers
     ), desc=f"Inference with BS={batch_size}", total=len(dataset))]
     return outs
+
+
+def yield_column(df: pd.DataFrame, column: str):
+    yield from df.loc[:, column].values
+
+
+def listify(nested_gen: Generator[Generator[Any, None, None], None, None]) -> list[list[Any]]:
+    return list(map(list, nested_gen))
