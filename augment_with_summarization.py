@@ -1,6 +1,6 @@
 import argparse
 import logging
-from pprint import pprint
+from pprint import pformat
 
 import pandas as pd
 from tqdm import tqdm
@@ -81,6 +81,14 @@ def get_parser() -> argparse.ArgumentParser:
         default=4,
         help="Number of workers to use for loading the data. Defaults to 4."
     )
+    parser.add_argument(
+        "--low_resource_cutoff",
+        type=int,
+        required=False,
+        default=None,
+        help="If provided, will only augment examples from classes which have no more examples than the "
+             "low resource cutoff."
+    )
     return parser
 
 
@@ -99,7 +107,6 @@ def main():
 
     df = pd.read_csv(args.input_path)
     logger.info(f"Loaded {len(df)} examples.")
-    dataset = DoceeForInference(df)
 
     tokenizer = AutoTokenizer.from_pretrained(
         args.pretrained_model_name_or_path,
@@ -115,6 +122,22 @@ def main():
     )
 
     summary_df = df.loc[:, :]  # retain all columns
+    if args.low_resource_cutoff:
+        logger.info(f"Low resource cutoff set to {args.low_resource_cutoff}."
+                    f"Augmenting only classes with no more than "
+                    f"{args.low_resource_cutoff} examples.")
+        # filter based on class count
+        from src.utils import low_resource_slice
+        low_resource_classes, summary_df = low_resource_slice(
+            summary_df,
+            args.low_resource_cutoff,
+            return_classes=True
+        )
+        logger.info(f"Low resource classes: {pformat(low_resource_classes)}")
+        logger.info(f"{len(summary_df) = }")
+
+    dataset = DoceeForInference(summary_df)
+
     summary_df.loc[:, "text"] = [
         out[0]["summary_text"] for out in tqdm(summarizer(
             dataset,
@@ -129,7 +152,7 @@ def main():
 
     df_to_save = pd.concat((df.loc[:, :], summary_df))
     logging.info(f"Length of concatenated dataset: {len(df_to_save)}")
-    logging.info(pprint(df_to_save.head()))
+    logging.info(pformat(df_to_save.head()))
     logging.info(f"Columns: {df_to_save.columns}")
 
     df_to_save.to_csv(args.output_path, index=False)
