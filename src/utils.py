@@ -101,6 +101,14 @@ def news_wiki_split(df: pd.DataFrame) -> NewsWikiSplit:
     )
 
 
+def measure_time(func, *args, **kwargs):
+    start_time = time.perf_counter()
+    result = func(*args, **kwargs)
+    end_time = time.perf_counter()
+    total_time = end_time - start_time
+    return total_time, result
+
+
 def timeit(func):
     @wraps(func)
     def timeit_wrapper(*args, **kwargs):
