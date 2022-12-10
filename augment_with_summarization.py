@@ -5,6 +5,9 @@ from pprint import pprint
 import pandas as pd
 from tqdm import tqdm
 from transformers import AutoTokenizer, pipeline
+from transformers.utils import PaddingStrategy
+
+from src.data import DoceeForInference
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +68,19 @@ def get_parser() -> argparse.ArgumentParser:
         help="Number of beams to use for beam search. Defaults to 4."
              "Setting this value to 1 means no beam search."
     )
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        required=True,
+        help="Batch size to use during inference"
+    )
+    parser.add_argument(
+        "--num_workers",
+        type=int,
+        required=False,
+        default=4,
+        help="Number of workers to use for loading the data. Defaults to 4."
+    )
     return parser
 
 
@@ -83,10 +99,12 @@ def main():
 
     df = pd.read_csv(args.input_path)
     logger.info(f"Loaded {len(df)} examples.")
+    dataset = DoceeForInference(df)
 
     tokenizer = AutoTokenizer.from_pretrained(
         args.pretrained_model_name_or_path,
-        usa_fast=True
+        padding=PaddingStrategy.MAX_LENGTH,
+        use_fast=True
     )
     summarizer = pipeline(
         "summarization",
@@ -96,19 +114,18 @@ def main():
         framework="pt"
     )
 
-    def summarize_text(text: str) -> str:
-        return summarizer(
-            text,
+    summary_df = df.loc[:, ["text", "event_type"]]
+    summary_df.loc[:, "text"] = [
+        out[0]["summary_text"] for out in tqdm(summarizer(
+            dataset,
             min_length=args.min_length,
             max_length=args.max_length,
             num_beams=args.num_beams,
-            do_sample=False,
             truncation=True,
-        )[0]["summary_text"]  # I guess this is the same for all models?
-
-    summary_df = df.loc[:, ["text", "event_type"]]
-    tqdm.pandas()
-    summary_df.loc[:, "text"] = summary_df["text"].progress_apply(summarize_text)
+            batch_size=args.batch_size,
+            num_workers=args.num_workers
+        ), desc=f"Inference loop", total=len(dataset))
+    ]
 
     df_to_save = pd.concat((df.loc[:, ["text", "event_type"]], summary_df))
     logging.info(f"Length of concatenated dataset: {len(df_to_save)}")
