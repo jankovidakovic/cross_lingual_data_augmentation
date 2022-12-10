@@ -33,6 +33,11 @@ def get_parser() -> ArgumentParser:
         action="store_true",
         default=True
     )
+    parser.add_argument(
+        "--news_only",
+        action="store_true",
+        help="If set, will extract low-resource examples only for news."
+    )
 
     return parser
 
@@ -54,7 +59,8 @@ def main():
     df = pd.read_csv(args.input_path)
 
     # extract news
-    df = df.loc[~df["date"].isna(), :]
+    if args.news_only:
+        df = df.loc[~df["date"].isna(), :]
 
     # extract low-resource, according to cutoff
     low_resource_classes, df = low_resource_slice(df, args.cutoff, return_classes=True)
