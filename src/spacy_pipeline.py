@@ -9,6 +9,7 @@ def process(*,
             nlp: Language,
             texts: Iterable[str],
             n_process: int,
+            batch_size: int,
             n_sents: int | None = None,
             **kwargs
             ) -> Generator[str, None, None]:
@@ -21,7 +22,7 @@ def process(*,
                 "lemmatizer"
             ]
     ):
-        for doc in nlp.pipe(texts, n_process=n_process):
+        for doc in nlp.pipe(texts, n_process=n_process, batch_size=batch_size):
             # generate sentences
             sents = (sent for sent in doc.sents)
 
@@ -36,6 +37,7 @@ def process(*,
 def make_pipeline(
         nlp: Language,
         n_process: int,
+        batch_size: int,
         n_sents: int | None = None,
         **kwargs
 ):
@@ -43,6 +45,7 @@ def make_pipeline(
         process,
         nlp=nlp,
         n_process=n_process,
+        batch_size=batch_size,
         n_sents=n_sents,
         **kwargs
     )

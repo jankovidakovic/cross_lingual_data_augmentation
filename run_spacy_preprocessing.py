@@ -34,6 +34,13 @@ def get_parser():
         help="Number of workers used to perform preprocessing. Higher is faster, default is 4."
     )
     parser.add_argument(
+        "--batch_size",
+        type=int,
+        required=False,
+        default=4,
+        help="Batch size to use. Defaults to 4."
+    )
+    parser.add_argument(
         "--num_sentences",
         type=int,
         required=False,
@@ -63,6 +70,7 @@ def main():
     pipeline = make_pipeline(
         nlp=nlp,
         n_process=args.num_workers,
+        batch_size=args.batch_size,
         n_sents=args.num_sentences
     )
 
