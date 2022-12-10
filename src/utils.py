@@ -1,8 +1,11 @@
+import time
+from functools import wraps
 from typing import Tuple
 
 import numpy as np
 import pandas as pd
 from sklearn.metrics import precision_score, recall_score, f1_score
+from tqdm import tqdm
 
 from src.data import NewsWikiSplit
 
@@ -96,3 +99,38 @@ def news_wiki_split(df: pd.DataFrame) -> NewsWikiSplit:
         news=df_news,
         wiki=df_wiki
     )
+
+
+def measure_time(func, *args, **kwargs):
+    start_time = time.perf_counter()
+    result = func(*args, **kwargs)
+    end_time = time.perf_counter()
+    total_time = end_time - start_time
+    return total_time, result
+
+
+def timeit(func):
+    @wraps(func)
+    def timeit_wrapper(*args, **kwargs):
+        start_time = time.perf_counter()
+        result = func(*args, **kwargs)
+        end_time = time.perf_counter()
+        total_time = end_time - start_time
+        # first item in the args, ie `args[0]` is `self`
+        print(f'Function {func.__name__}{args} {kwargs} Took {total_time:.4f} seconds')
+        return result
+    return timeit_wrapper
+
+
+@timeit
+def do_inference(batch_size: int, pipeline, dataset, num_workers: int = 4):
+    # Without batch size:
+    outs = [out[0]["summary_text"] for out in tqdm(pipeline(
+        dataset,
+        min_length=20,
+        max_length=200,
+        truncation=True,
+        batch_size=batch_size,
+        num_workers=num_workers
+    ), desc=f"Inference with BS={batch_size}", total=len(dataset))]
+    return outs

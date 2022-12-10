@@ -119,3 +119,16 @@ class NewsWikiSplit:
 
     def map(self, f: Callable[[pd.DataFrame], pd.DataFrame]):
         return NewsWikiSplit(news=f(self.news), wiki=f(self.wiki))
+
+
+class DoceeForInference(Dataset):
+    def __init__(self, df):
+        self.df = df.loc[:, "text"]
+
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, item):
+        return self.df.iloc[item]
+
+
