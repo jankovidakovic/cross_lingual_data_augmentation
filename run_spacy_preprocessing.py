@@ -64,7 +64,7 @@ def main():
     args = get_parser().parse_args()
 
     # load the pipeline
-    nlp = spacy.load("en_core_web_trf", disable=["parser", "ner"])
+    nlp = spacy.load("en_core_web_trf", disable=["parser", "ner", "transformer"])
     nlp.add_pipe("sentencizer")
     logger.info(f"Loaded NLP pipeline: {nlp.pipeline}")
     pipeline = make_pipeline(
