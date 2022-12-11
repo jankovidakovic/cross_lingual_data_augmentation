@@ -191,7 +191,7 @@ def main():
     dataset = DoceeForInference(df)
 
     y_pred = np.array([
-        out[0]["label"]
+        out["label"]
         for out in tqdm(inference(
             dataset,
             truncation=True,
@@ -199,6 +199,8 @@ def main():
             num_workers=args.num_workers
         ), desc=f"Inference, BS = {args.batch_size}", total=len(dataset))
     ])
+
+    logger.info(f"Example predictions: {pformat(y_pred[:5])}")
 
     cls_metrics = classification_report(
         y_true=df.event_type.values,
