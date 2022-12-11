@@ -4,6 +4,7 @@ import os
 from argparse import ArgumentParser
 from pprint import pformat, pprint
 
+import numpy as np
 import pandas as pd
 from sklearn.metrics import classification_report
 from tqdm import tqdm
@@ -12,7 +13,7 @@ from transformers import pipeline
 import wandb
 
 from src.constants import MODEL_CLASSES
-
+from src.data import DoceeForInference
 
 logger = logging.getLogger(__name__)
 
@@ -61,25 +62,24 @@ def get_parser() -> ArgumentParser:
              "This flag is useful when one is using uncased models (e.g. 'bert-base-uncased')",
     )
 
-    # parser.add_argument(
-    #     "--per_device_eval_batch_size",
-    #     default=2,
-    #     type=int,
-    #     help="Batch size used during evaluation (per device). Defaults to 2.",
-    # )
-    # parser.add_argument(
-    #     "--dataloader_num_workers",
-    #     type=int,
-    #     default=0,
-    #     help="Number of workers to use for dataloading. For best performance, set "
-    #          "this to the number of available CPU cores."
-    # )
+    parser.add_argument(
+        "--batch_size",
+        default=2,
+        type=int,
+        help="Batch size used during inference. Defaults to 2.",
+    )
+    parser.add_argument(
+        "--num_workers",
+        type=int,
+        default=1,
+        help="Number of workers to use for dataloading. Defaults to 1."
+    )
 
     parser.add_argument(
         "--output_path",
         type=str,
         required=True,
-        help="The output path to which the classification report will be written"
+        help="The output path to which the classification report will be saved."
     )
 
     # runtime meta args
@@ -152,7 +152,7 @@ def main():
     # )  # do we even need this?
     tokenizer = model_type.tokenizer.from_pretrained(
         pretrained_model_name_or_path=args.pretrained_model_name_or_path,
-        do_lower_case=args.do_lower_case
+        do_lower_case=args.do_lower_case,
     )
     model = model_type.model.from_pretrained(
         pretrained_model_name_or_path=args.pretrained_model_name_or_path
@@ -177,37 +177,42 @@ def main():
         model=model,
         tokenizer=tokenizer,
         device=args.device,
-        # num_workers=args.dataloader_num_workers,
-        # batch_size=args.per_device_eval_batch_size,
         framework="pt",
         truncation=True
     )
 
-    label_names = sorted(df.event_type.unique().tolist())
+    # label_names = sorted(df.event_type.unique().tolist())
 
-    label2id = {
-        label: i
-        for i, label in enumerate(label_names)
-    }
+    # label2id = {
+    #     label: i
+    #     for i, label in enumerate(label_names)
+    # }
 
-    # expected_output = map(label2id.__getitem__, df.event_type.tolist())  # those are textual labels
-    tqdm.pandas()
-    df.loc[:, "y_pred"] = df["text"].progress_apply(
-        lambda text: int(inference(text)[0]["label"].split("_")[1])
-    )
+    dataset = DoceeForInference(df)
+
+    y_pred = np.array([
+        out[0]["label"]
+        for out in tqdm(inference(
+            dataset,
+            truncation=True,
+            batch_size=args.batch_size,
+            num_workers=args.num_workers
+        ), desc=f"Inference, BS = {args.batch_size}", total=len(dataset))
+    ])
 
     cls_metrics = classification_report(
-        list(map(label2id.__getitem__, df.event_type.tolist())),
-        df.y_pred.tolist(),
-        target_names=label_names,
+        y_true=df.event_type.values,
+        y_pred=y_pred,
         output_dict=True
     )
 
-    pprint(cls_metrics)
+    logger.info(pformat(cls_metrics))
 
     # save cls_metrics to a file
     with open(args.output_path, "w") as f:
-        json.dump(cls_metrics, f)
+        json.dump(cls_metrics, f, indent=2)
+
+    logger.info(f"Results saved to {args.output_path}")
 
 
 if __name__ == '__main__':
