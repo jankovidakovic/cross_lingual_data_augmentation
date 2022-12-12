@@ -157,6 +157,7 @@ def main():
     model = model_type.model.from_pretrained(
         pretrained_model_name_or_path=args.pretrained_model_name_or_path
     )
+    logger.info(f"model label2id: {pformat(model.label2id)}")
 
     if args.test_filename and not os.path.exists(args.test_filename):
         logger.error(
