@@ -146,16 +146,16 @@ def main():
     model_type = MODEL_CLASSES[args.model_type]
     logger.info(f"Using model type: {args.model_type}")
 
-    # config = model_type.config.from_pretrained(
-    #     pretrained_model_name_or_path=args.config_name or args.pretrained_model_name_or_path,
-    #     cache_dir=args.cache_dir,
-    # )  # do we even need this?
+    config = model_type.config.from_pretrained(
+        pretrained_model_name_or_path=args.config_name or args.pretrained_model_name_or_path,
+    )  # do we even need this?
     tokenizer = model_type.tokenizer.from_pretrained(
         pretrained_model_name_or_path=args.pretrained_model_name_or_path,
         do_lower_case=args.do_lower_case,
     )
     model = model_type.model.from_pretrained(
-        pretrained_model_name_or_path=args.pretrained_model_name_or_path
+        pretrained_model_name_or_path=args.pretrained_model_name_or_path,
+        config=config
     )
     logger.info(f"model label2id: {pformat(model.label2id)}")
 
