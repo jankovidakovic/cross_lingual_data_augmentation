@@ -9,7 +9,6 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import classification_report
 from sklearn.pipeline import make_pipeline
 from sklearn.svm import LinearSVC
-from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +20,12 @@ def get_parser():
         type=str,
         required=True,
         help="Path to the training dataset"
+    )
+    parser.add_argument(
+        "--dev_dataset",
+        type=str,
+        required=False,
+        help="Path to the development dataset"
     )
     parser.add_argument(
         "--test_dataset",
@@ -66,6 +71,12 @@ def main():
     logger.info(f"Loaded {len(test_df)} testing examples from {args.test_dataset}")
     logger.info(pformat(test_df.head()))
 
+    if args.dev_dataset:
+        dev_df = pd.read_csv(args.dev_dataset)
+        dev_df.loc[:, "tokens"] = dev_df.tokens.apply(literal_eval)
+        logger.info(f"Loaded {len(dev_df)} dev examples from {args.dev_dataset}")
+        logger.info(pformat(dev_df.head()))
+
     identity = lambda x: x
 
     pipeline = make_pipeline(
@@ -81,14 +92,24 @@ def main():
 
     X_train, y_train = train_df.tokens.values, train_df.event_type.values
     X_test, y_test = test_df.tokens.values, test_df.event_type.values
+    if args.dev_dataset:
+        X_dev, y_dev = dev_df.tokens.values, dev_df.event_type.values
 
     pipeline.fit(X_train, y_train)
     y_train_pred = pipeline.predict(X_train)
     y_pred = pipeline.predict(X_test)
+    if args.dev_dataset:
+        y_pred_dev = pipeline.predict(X_dev)
 
     logger.info(f"Training complete.")
     train_metrics = classification_report(y_true=y_train, y_pred=y_train_pred, output_dict=True)
     test_metrics = classification_report(y_true=y_test, y_pred=y_pred, output_dict=True)
+    if args.dev_dataset:
+        dev_metrics = classification_report(
+            y_true=y_dev,
+            y_pred=y_pred_dev,
+            output_dict=True
+        )
 
     logger.info(f"Train metrics: {pformat(train_metrics)}")
     logger.info(f"Test metrics: {pformat(test_metrics)}")
@@ -103,6 +124,12 @@ def main():
             "metrics": test_metrics
         }
     }
+
+    if args.dev_dataset:
+        dict_to_save.update({"dev": {
+            "dataset": args.dev_dataset,
+            "metrics": dev_metrics
+        }})
 
     with open(args.output_path, "w") as f:
         json.dump(dict_to_save, f, indent=2)
