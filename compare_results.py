@@ -49,10 +49,10 @@ def main():
     )
     args = get_parser().parse_args()
 
-    with open(args.old_results, "r") as f:
+    with open(args.old_results_path, "r") as f:
         old_results = json.load(f)
 
-    with open(args.new_results, "r") as f:
+    with open(args.new_results_path, "r") as f:
         new_results = json.load(f)
 
     if args.results_key:
