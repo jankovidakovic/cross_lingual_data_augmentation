@@ -189,7 +189,7 @@ def main():
     dataset = DoceeForInference(df)
 
     y_pred = np.array([
-        label2id[out["label"]]
+        int(out["label"].split("_")[1])
         for out in tqdm(inference(
             dataset,
             truncation=True,
