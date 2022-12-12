@@ -46,6 +46,13 @@ def get_parser():
         default=3,
         help="Minimum document frequency. Defaults to 3."
     )
+    parser.add_argument(
+        "--max_df",
+        type=float,
+        required=False,
+        default=1.0,
+        help="Maximum document frequency. Defaults to 1."
+    )
     return parser
 
 
@@ -84,6 +91,7 @@ def main():
             tokenizer=identity,
             preprocessor=identity,
             min_df=args.min_df,
+            max_df=args.max_df,
             ngram_range=(1,3),
         ),
         LinearSVC(verbose=True),
