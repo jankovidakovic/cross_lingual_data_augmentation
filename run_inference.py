@@ -146,18 +146,13 @@ def main():
     model_type = MODEL_CLASSES[args.model_type]
     logger.info(f"Using model type: {args.model_type}")
 
-    config = model_type.config.from_pretrained(
-        pretrained_model_name_or_path=args.config_name or args.pretrained_model_name_or_path,
-    )  # do we even need this?
     tokenizer = model_type.tokenizer.from_pretrained(
         pretrained_model_name_or_path=args.pretrained_model_name_or_path,
         do_lower_case=args.do_lower_case,
     )
     model = model_type.model.from_pretrained(
         pretrained_model_name_or_path=args.pretrained_model_name_or_path,
-        config=config
     )
-    logger.info(f"model label2id: {pformat(model.label2id)}")
 
     if args.test_filename and not os.path.exists(args.test_filename):
         logger.error(
@@ -182,17 +177,19 @@ def main():
         truncation=True
     )
 
-    # label_names = sorted(df.event_type.unique().tolist())
+    # extract label names
+    label_names = sorted(df.event_type.unique().tolist())
 
-    # label2id = {
-    #     label: i
-    #     for i, label in enumerate(label_names)
-    # }
+    # create label2id
+    label2id = {
+        label: i
+        for i, label in enumerate(label_names)
+    }
 
     dataset = DoceeForInference(df)
 
     y_pred = np.array([
-        out["label"]
+        label2id[out["label"]]
         for out in tqdm(inference(
             dataset,
             truncation=True,
@@ -204,8 +201,9 @@ def main():
     logger.info(f"Example predictions: {pformat(y_pred[:5])}")
 
     cls_metrics = classification_report(
-        y_true=df.event_type.values,
+        y_true=list(map(label2id.__getitem__, df.event_type.values)),
         y_pred=y_pred,
+        target_names=label_names,
         output_dict=True
     )
 
