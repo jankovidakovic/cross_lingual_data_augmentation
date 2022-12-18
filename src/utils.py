@@ -1,6 +1,6 @@
 import time
 from functools import wraps
-from typing import Tuple, Generator, Any
+from typing import Tuple, Generator, Any, Callable, Iterable
 
 import numpy as np
 import pandas as pd
@@ -136,8 +136,13 @@ def do_inference(batch_size: int, pipeline, dataset, num_workers: int = 4):
     return outs
 
 
-def yield_column(df: pd.DataFrame, column: str):
-    yield from df.loc[:, column].values
+def yield_columns(
+        df: pd.DataFrame,
+        columns: list[str],
+        concat: Callable[[Iterable], str]
+):
+    for unit in df.loc[:, columns].values:
+        yield concat(list(unit))
 
 
 def listify(nested_gen: Generator[Generator[Any, None, None], None, None]) -> list[list[Any]]:

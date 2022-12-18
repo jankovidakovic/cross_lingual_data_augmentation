@@ -7,7 +7,7 @@ import spacy
 from tqdm import tqdm
 
 from src.spacy_pipeline import make_pipeline
-from src.utils import yield_column
+from src.utils import yield_columns
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +47,11 @@ def get_parser():
         default=25,
         help="Number of leadning sentences to retain. Defaults to 25."
     )
+    parser.add_argument(
+        "--prepend_title",
+        action="store_true",
+        help="If used, will prepent the title."
+    )
     return parser
 
 
@@ -79,7 +84,10 @@ def main():
     logger.info(f"Loaded {len(df)} examples.")
     logger.info(pformat(df.head()))
 
-    text_it = yield_column(df, "text")
+    columns_to_yield_from = ["text"]
+    if args.prepend_title:
+        columns_to_yield_from = ["title"] + columns_to_yield_from
+    text_it = yield_columns(df, columns_to_yield_from, concat=". ".join)
     tokens = [
         list(tokens) for tokens in tqdm(pipeline(texts=text_it), desc="Preprocessing", total=len(df))
     ]
