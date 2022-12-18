@@ -15,7 +15,6 @@ def process(*,
             ) -> Generator[str, None, None]:
     with nlp.select_pipes(
             enable=[
-                "transformer",
                 "tagger",
                 "attribute_ruler",
                 "sentencizer",
