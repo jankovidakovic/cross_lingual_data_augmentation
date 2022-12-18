@@ -114,7 +114,7 @@ def main():
         framework="pt"
     )
 
-    summary_df = df.loc[:, ["text", "event_type"]]
+    summary_df = df.loc[:, :]  # retain all columns
     summary_df.loc[:, "text"] = [
         out[0]["summary_text"] for out in tqdm(summarizer(
             dataset,
@@ -127,7 +127,7 @@ def main():
         ), desc=f"Inference loop", total=len(dataset))
     ]
 
-    df_to_save = pd.concat((df.loc[:, ["text", "event_type"]], summary_df))
+    df_to_save = pd.concat((df.loc[:, :], summary_df))
     logging.info(f"Length of concatenated dataset: {len(df_to_save)}")
     logging.info(pprint(df_to_save.head()))
     logging.info(f"Columns: {df_to_save.columns}")
