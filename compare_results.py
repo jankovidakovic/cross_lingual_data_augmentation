@@ -22,11 +22,12 @@ def get_parser():
         help="Filesystem path to new results"
     )
     parser.add_argument(
-        "--results_key",
+        "--result_keys",
         type=str,
+        nargs="*",
         required=False,
         default=None,
-        help="Key under which the results are stored in loaded files."
+        help="Keys under which the results are stored in loaded files."
     )
     parser.add_argument(
         "--output_path",
@@ -55,26 +56,34 @@ def main():
     with open(args.new_results_path, "r") as f:
         new_results = json.load(f)
 
-    if args.results_key:
-        old_results = old_results[args.results_key]
-        new_results = new_results[args.results_key]
+    if args.result_keys:
+        for key in args.result_keys:
+            old_results = old_results[key]
+            new_results = new_results[key]
+
+    logger.info(f"Old results: {pformat(old_results)}")
+    logger.info(f"News results: {pformat(new_results)}")
 
     def get_delta_dict(key: str, metrics: Iterable[str] = ("precision", "recall", "f1-score")):
-        return dict(zip(metrics, map(lambda metric: {
-            "old": old_results[key][metric],
-            "new": new_results[key][metric],
-            "delta": new_results[key][metric] - old_results[key][metric],
+        logger.info(f"Computing delta dict for key: {key}")
+        return {
+            "metrics": dict(zip(metrics, map(lambda metric: {
+                    "old": old_results[key][metric],
+                    "new": new_results[key][metric],
+                    "delta": new_results[key][metric] - old_results[key][metric],
+                }, metrics))),
             "support": old_results[key]["support"]
-        }, metrics)))
+        }
 
-    keys = filter(lambda x: x != "accuracy", old_results)
+    keys = list(filter(lambda x: x != "accuracy", old_results))
+    logger.info(f"Keys: {keys}")
 
     comparison = dict(zip(
         keys,
         map(get_delta_dict, keys)
     ))
 
-    logger.info(pformat(comparison))
+    # logger.info(pformat(comparison))
 
     with open(args.output_path, "w") as f:
         json.dump(comparison, f, indent=2)
