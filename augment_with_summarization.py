@@ -122,6 +122,7 @@ def main():
     )
 
     summary_df = df.loc[:, :]  # retain all columns
+
     if args.low_resource_cutoff:
         logger.info(f"Low resource cutoff set to {args.low_resource_cutoff}."
                     f"Augmenting only classes with no more than "
