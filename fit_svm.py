@@ -53,6 +53,11 @@ def get_parser():
         default=1.0,
         help="Maximum document frequency. Defaults to 1."
     )
+    parser.add_argument(
+        "--lowercase",
+        action="store_true",
+        help="If set, input text will be lowercased."
+    )
     return parser
 
 
@@ -93,6 +98,7 @@ def main():
             min_df=args.min_df,
             max_df=args.max_df,
             ngram_range=(1,3),
+            lowercase=args.lowercase
         ),
         LinearSVC(verbose=True),
         verbose=True
@@ -123,6 +129,12 @@ def main():
     logger.info(f"Test metrics: {pformat(test_metrics)}")
 
     dict_to_save = {
+        "hyperparameters": {
+            "min_df": args.min_df,
+            "max_df": args.max_df,
+            "ngram_range": (1, 3),
+            "lowercase": args.lowercase
+        },
         "train": {
             "dataset": args.train_dataset,
             "metrics": train_metrics
