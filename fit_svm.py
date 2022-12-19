@@ -111,17 +111,17 @@ def main():
 
     pipeline.fit(X_train, y_train)
     y_train_pred = pipeline.predict(X_train)
-    y_pred = pipeline.predict(X_test)
+    y_test_pred = pipeline.predict(X_test)
     if args.dev_dataset:
-        y_pred_dev = pipeline.predict(X_dev)
+        y_dev_pred = pipeline.predict(X_dev)
 
     logger.info(f"Training complete.")
     train_metrics = classification_report(y_true=y_train, y_pred=y_train_pred, output_dict=True)
-    test_metrics = classification_report(y_true=y_test, y_pred=y_pred, output_dict=True)
+    test_metrics = classification_report(y_true=y_test, y_pred=y_test_pred, output_dict=True)
     if args.dev_dataset:
         dev_metrics = classification_report(
             y_true=y_dev,
-            y_pred=y_pred_dev,
+            y_pred=y_dev_pred,
             output_dict=True
         )
 
