@@ -147,3 +147,7 @@ def yield_columns(
 
 def listify(nested_gen: Generator[Generator[Any, None, None], None, None]) -> list[list[Any]]:
     return list(map(list, nested_gen))
+
+
+def identity(x: Any) -> Any:
+    return x

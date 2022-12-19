@@ -10,6 +10,8 @@ from sklearn.metrics import classification_report
 from sklearn.pipeline import make_pipeline
 from sklearn.svm import LinearSVC
 
+from src.utils import identity
+
 logger = logging.getLogger(__name__)
 
 
@@ -88,8 +90,6 @@ def main():
         dev_df.loc[:, "tokens"] = dev_df.tokens.apply(literal_eval)
         logger.info(f"Loaded {len(dev_df)} dev examples from {args.dev_dataset}")
         logger.info(pformat(dev_df.head()))
-
-    identity = lambda x: x
 
     pipeline = make_pipeline(
         TfidfVectorizer(
