@@ -108,6 +108,8 @@ def main():
     df = pd.read_csv(args.input_path)
     logger.info(f"Loaded {len(df)} examples.")
 
+    # df has "id" column
+
     tokenizer = AutoTokenizer.from_pretrained(
         args.pretrained_model_name_or_path,
         padding=PaddingStrategy.MAX_LENGTH,
@@ -121,7 +123,7 @@ def main():
         framework="pt"
     )
 
-    summary_df = df.loc[:, :]  # retain all columns
+    summary_df = df.loc[:, :]  # retain all columns (including the id)
 
     if args.low_resource_cutoff:
         logger.info(f"Low resource cutoff set to {args.low_resource_cutoff}."
@@ -137,6 +139,8 @@ def main():
         logger.info(f"Low resource classes: {pformat(low_resource_classes)}")
         logger.info(f"{len(summary_df) = }")
 
+    # after low-resource slice, ids are still retained
+
     dataset = DoceeForInference(summary_df)
 
     summary_df.loc[:, "text"] = [
@@ -149,6 +153,7 @@ def main():
             batch_size=args.batch_size,
             num_workers=args.num_workers
         ), desc=f"Inference loop", total=len(dataset))
+
         # early_stopping :: bool
         #   if set to True, then generation will finish as soon as all beams generate EOS token
         #   tbh it doesnt make sense to ever not set this to true
@@ -204,7 +209,16 @@ def main():
 
     ]
 
+    summary_df.loc[:, "source_doc_id"] = summary_df.loc[:, "id"]
     df_to_save = pd.concat((df.loc[:, :], summary_df))
+
+    # reset index
+    df_to_save.drop(columns=["id"], inplace=True)
+    df_to_save.reset_index(names="id", inplace=True)
+    # since unsummarized examples come first, their ids will correctly
+    #   be set in accordance to source_doc_id
+    # unsummarized examples will have source_doc_id set to NaN
+
     logging.info(f"Length of concatenated dataset: {len(df_to_save)}")
     logging.info(pformat(df_to_save.head()))
     logging.info(f"Columns: {df_to_save.columns}")
