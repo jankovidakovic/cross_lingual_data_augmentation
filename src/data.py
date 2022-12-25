@@ -1,11 +1,13 @@
 import logging
 from dataclasses import dataclass, field
 from pprint import pformat
-from typing import Optional, Sequence, Generator, Callable
+from typing import Optional, Sequence, Generator, Callable, Iterable
 
 import pandas as pd
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer
+
+from src.utils import concat_dot_join
 
 
 @dataclass
@@ -112,23 +114,21 @@ class DoceeWithArguments(Docee):
         # add argument information
 
 
-@dataclass
-class NewsWikiSplit:
-    news: pd.DataFrame = field(kw_only=True)
-    wiki: pd.DataFrame = field(kw_only=True)
-
-    def map(self, f: Callable[[pd.DataFrame], pd.DataFrame]):
-        return NewsWikiSplit(news=f(self.news), wiki=f(self.wiki))
-
-
 class DoceeForInference(Dataset):
-    def __init__(self, df):
-        self.df = df.loc[:, "text"]
+    def __init__(
+            self, 
+            df: pd.DataFrame,
+            use_title: bool = False,
+            concat: Optional[Callable[[Iterable[str]], str]] = concat_dot_join
+    ):
+        columns = ["title", "text"] if use_title else ["text"]
+        self.concat = concat
+        self.df = df.loc[:, columns]
 
     def __len__(self):
         return len(self.df)
 
     def __getitem__(self, item):
-        return self.df.iloc[item]
+        return self.concat(self.df.iloc[item])
 
 
