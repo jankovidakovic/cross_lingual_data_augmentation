@@ -132,7 +132,7 @@ def main():
     # retain only columns relevant for event classification
     df = df.loc[:, ["text", "title", "event_type", "date"]]
     logger.info(f"Retaining only columns: {pformat(df.columns)}")
-    summary_df = df.loc[:, :]
+    summary_df = df.copy()
     # TODO - make relevant columns CLI-supplied
 
     if args.low_resource_cutoff:
@@ -222,7 +222,8 @@ def main():
     # set the source document ids
     summary_df.reset_index(names="source_doc_id", inplace=True)
     logger.info(f"Summary_df preview: {pformat(summary_df.head())}")
-    df_to_save = pd.concat((df, summary_df))
+    df_to_save = pd.concat((df, summary_df), ignore_index=True)
+
     logger.info(f"Columns of concatenated dataset: {df_to_save.columns}")
 
     # since unsummarized examples come first, their ids will correctly
@@ -236,6 +237,7 @@ def main():
     # TODO - save hyperparameter info, or do dataset versioning via W&B
 
     df_to_save.to_csv(args.output_path, index_label="id")
+    logger.info(f"Successfully saved resulting dataset at path  {args.output_path}")
 
 
 if __name__ == '__main__':
