@@ -89,6 +89,12 @@ def get_parser() -> argparse.ArgumentParser:
         help="If provided, will only augment examples from classes which have no more examples than the "
              "low resource cutoff."
     )
+    parser.add_argument(
+        "--use_title",
+        action="store_true",
+        help="If provided, will include the title (along with text) for summarization"
+    )
+
     return parser
 
 
@@ -141,7 +147,7 @@ def main():
 
     # after low-resource slice, ids are still retained
 
-    dataset = DoceeForInference(summary_df)
+    dataset = DoceeForInference(summary_df, use_title=args.use_title)
 
     summary_df.loc[:, "text"] = [
         out[0]["summary_text"] for out in tqdm(summarizer(
@@ -222,6 +228,8 @@ def main():
     logging.info(f"Length of concatenated dataset: {len(df_to_save)}")
     logging.info(pformat(df_to_save.head()))
     logging.info(f"Columns: {df_to_save.columns}")
+
+    # TODO - save hyperparameter info, or do dataset versioning via W&B
 
     df_to_save.to_csv(args.output_path, index=False)
 
