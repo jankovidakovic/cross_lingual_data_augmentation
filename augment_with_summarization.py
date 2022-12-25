@@ -129,7 +129,8 @@ def main():
         framework="pt"
     )
 
-    summary_df = df.loc[:, :]  # retain all columns (including the id)
+    # retain only columns relevant for event classification
+    summary_df = df.loc[:, ["text", "title", "event_type", "date"]]
 
     if args.low_resource_cutoff:
         logger.info(f"Low resource cutoff set to {args.low_resource_cutoff}."
@@ -215,11 +216,11 @@ def main():
 
     ]
 
-    summary_df.loc[:, "source_doc_id"] = summary_df.loc[:, "id"]
+    summary_df.reset_index(names="source_doc_id", inplace=True)
+    # summary_df.loc[:, "source_doc_id"] = summary_df.loc[:, "id"]
     df_to_save = pd.concat((df.loc[:, :], summary_df))
 
     # reset index
-    df_to_save.drop(columns=["id"], inplace=True)
     df_to_save.reset_index(names="id", inplace=True)
     # since unsummarized examples come first, their ids will correctly
     #   be set in accordance to source_doc_id
