@@ -219,13 +219,12 @@ def main():
 
     ]
 
+    # set the source document ids
     summary_df.reset_index(names="source_doc_id", inplace=True)
     logger.info(f"Summary_df preview: {pformat(summary_df.head())}")
     df_to_save = pd.concat((df, summary_df))
     logger.info(f"Columns of concatenated dataset: {df_to_save.columns}")
 
-    # reset index
-    df_to_save.reset_index(names="id", inplace=True)
     # since unsummarized examples come first, their ids will correctly
     #   be set in accordance to source_doc_id
     # unsummarized examples will have source_doc_id set to NaN
@@ -236,7 +235,7 @@ def main():
 
     # TODO - save hyperparameter info, or do dataset versioning via W&B
 
-    df_to_save.to_csv(args.output_path, index=False)
+    df_to_save.to_csv(args.output_path, index_label="id")
 
 
 if __name__ == '__main__':
