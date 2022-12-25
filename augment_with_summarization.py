@@ -130,7 +130,9 @@ def main():
     )
 
     # retain only columns relevant for event classification
-    summary_df = df.loc[:, ["text", "title", "event_type", "date"]]
+    df = df.loc[:, ["text", "title", "event_type", "date"]]
+    summary_df = df.loc[:, :]
+    # TODO - make relevant columns CLI-supplied
 
     if args.low_resource_cutoff:
         logger.info(f"Low resource cutoff set to {args.low_resource_cutoff}."
@@ -217,8 +219,7 @@ def main():
     ]
 
     summary_df.reset_index(names="source_doc_id", inplace=True)
-    # summary_df.loc[:, "source_doc_id"] = summary_df.loc[:, "id"]
-    df_to_save = pd.concat((df.loc[:, :], summary_df))
+    df_to_save = pd.concat((df, summary_df))
 
     # reset index
     df_to_save.reset_index(names="id", inplace=True)
