@@ -7,7 +7,7 @@ import pandas as pd
 from sklearn.metrics import precision_score, recall_score, f1_score
 from tqdm import tqdm
 
-from src.data import NewsWikiSplit
+from src.types import NewsWikiSplit
 
 
 def count_unique(df: pd.DataFrame, col_name: str) -> int | None:
@@ -136,10 +136,14 @@ def do_inference(batch_size: int, pipeline, dataset, num_workers: int = 4):
     return outs
 
 
+def concat_dot_join(tokens: Iterable[str]) -> str:
+    return ". ".join(tokens)
+
+
 def yield_columns(
         df: pd.DataFrame,
         columns: list[str],
-        concat: Callable[[Iterable], str]
+        concat: Callable[[Iterable[str]], str] = concat_dot_join
 ):
     for unit in df.loc[:, columns].values:
         yield concat(list(unit))
