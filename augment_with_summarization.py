@@ -131,6 +131,7 @@ def main():
 
     # retain only columns relevant for event classification
     df = df.loc[:, ["text", "title", "event_type", "date"]]
+    logger.info(f"Retaining only columns: {pformat(df.columns)}")
     summary_df = df.loc[:, :]
     # TODO - make relevant columns CLI-supplied
 
@@ -219,7 +220,9 @@ def main():
     ]
 
     summary_df.reset_index(names="source_doc_id", inplace=True)
+    logger.info(f"Summary_df preview: {pformat(summary_df.head())}")
     df_to_save = pd.concat((df, summary_df))
+    logger.info(f"Columns of concatenated dataset: {df_to_save.columns}")
 
     # reset index
     df_to_save.reset_index(names="id", inplace=True)
