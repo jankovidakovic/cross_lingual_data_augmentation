@@ -9,6 +9,7 @@ from transformers import AutoTokenizer, pipeline, set_seed, enable_full_determin
 from transformers.utils import PaddingStrategy
 
 from src.data import DoceeForInference
+from src.utils import alternating_concat
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +140,14 @@ def get_parser() -> argparse.ArgumentParser:
         "Setting T < 1 will make the distribution sharper."
     )
 
+    parser.add_argument(
+        "--num_return_sequences",
+        type=int,
+        default=1,
+        help="Number of sequences to return for each source document which is summarized. "
+        "Note that this option doesn't make sense unless `do_sample` is also set. Defaults to 1."
+        )
+
 
     return parser
 
@@ -196,9 +205,17 @@ def main():
             return_classes=True
         )
         logger.info(f"Low resource classes: {pformat(low_resource_classes)}")
-        logger.info(f"{len(summary_df) = }")
 
     # after low-resource slice, ids are still retained
+
+    # save the correct indices
+    source_doc_ids = summary_df.index.values  # np.array
+
+    total_summaries = len(summary_df) * args.num_return_sequences
+    logger.info(f"For each of the {len(summary_df)} source documents, "
+               f"{args.num_return_sequences} will be generated. In total, "
+               f"{total_summaries} summaries will be generated."
+    )
 
     dataset = DoceeForInference(summary_df, use_title=args.use_title)
 
@@ -220,9 +237,18 @@ def main():
     if args.top_p != 1.0:
         logger.info(f"Using top-p sampling with p = {args.top_p}")
 
+    # make space for all the examples
+    summary_df = alternating_concat(
+            summary_df.loc[:, ["title", "date", "event_type"]], 
+            args.num_return_sequences
+    )
 
-    summary_df.loc[:, "text"] = [
-        out[0]["summary_text"] for out in tqdm(summarizer(
+    assert len(summary_df) == total_summaries, f"Length of summary_df should be"
+    f" equal to {total_summaries}, but is equal to {len(summary_df)} instead."
+
+    summary_df.loc[:, ["text", "source_doc_id"]] = [
+        (out[j]["summary_text"], source_doc_ids[i])
+        for i, out in enumerate(tqdm(summarizer(
             dataset,
             truncation=True,
             batch_size=args.batch_size,
@@ -234,8 +260,10 @@ def main():
             top_k=args.top_k,
             top_p=args.top_p,
             temperature=args.temperature,
-            do_sample=args.do_sample
-        ), desc=f"Inference loop", total=len(dataset))
+            do_sample=args.do_sample,
+            num_return_sequences=args.num_return_sequences
+        ), desc=f"Inference loop", total=len(dataset)))
+        for j in range(len(out))
 
         # early_stopping :: bool
         #   if set to True, then generation will finish as soon as all beams generate EOS token
@@ -292,8 +320,10 @@ def main():
 
     ]
 
+    assert len(summary_df) == total_summaries, f"Length of summary_df should be"
+    f" equal to {total_summaries}, but is equal to {len(summary_df)} instead."
+
     # set the source document ids
-    summary_df.reset_index(names="source_doc_id", inplace=True)
     logger.info(f"Summary_df preview: {pformat(summary_df.head())}")
     df_to_save = pd.concat((df, summary_df), ignore_index=True)
 

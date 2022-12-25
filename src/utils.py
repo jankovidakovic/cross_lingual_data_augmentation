@@ -155,3 +155,6 @@ def listify(nested_gen: Generator[Generator[Any, None, None], None, None]) -> li
 
 def identity(x: Any) -> Any:
     return x
+
+def alternating_concat(df: pd.DataFrame, n_duplicates: int):
+    return pd.DataFrame([row[1] for row in df.iterrows() for _ in range(n_duplicates)])
