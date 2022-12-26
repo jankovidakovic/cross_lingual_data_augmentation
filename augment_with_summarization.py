@@ -148,6 +148,13 @@ def get_parser() -> argparse.ArgumentParser:
         "Note that this option doesn't make sense unless `do_sample` is also set. Defaults to 1."
         )
 
+    parser.add_argument(
+        "--penalty_alpha",
+        type=float,
+        default=0,
+        help="Alpha for contrastive search. Defaults to 0 (turned off)"
+    )
+
 
     return parser
 
@@ -237,6 +244,9 @@ def main():
     if args.top_p != 1.0:
         logger.info(f"Using top-p sampling with p = {args.top_p}")
 
+    if args.penalty_alpha != 0:
+        logger.info(f"Using contrastive search with alpha = {args.penalty_alpha}")
+
     # make space for all the examples
     summary_df = alternating_concat(
             summary_df.loc[:, ["title", "date", "event_type"]], 
@@ -261,7 +271,8 @@ def main():
             top_p=args.top_p,
             temperature=args.temperature,
             do_sample=args.do_sample,
-            num_return_sequences=args.num_return_sequences
+            num_return_sequences=args.num_return_sequences,
+            penalty_alpha=args.penalty_alpha
         ), desc=f"Inference loop", total=len(dataset)))
         for j in range(len(out))
 
