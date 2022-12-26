@@ -4,8 +4,10 @@ from pprint import pformat
 from typing import Optional, Sequence, Generator, Callable, Iterable
 
 import pandas as pd
+import numpy as np
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer
+from sklearn.model_selection import StratifiedKFold
 
 from src.utils import concat_dot_join
 
@@ -18,7 +20,7 @@ class Argument:
     text: str
 
     @classmethod
-    def from_dict(cls, d: dict[str, int|str]):
+    def from_dict(cls, d: dict[str, int | str]):
         return cls(**d)
 
 
@@ -38,17 +40,21 @@ def inspect_dataset(dataset: Dataset):
                 print(f"Type of element: {type(field[0])}")
                 print(f"First element = {field[0]}")
     else:
-        logging.warning(f"Cannot inspect dataset {dataset} because it has no `fields` attribute.")
+        logging.warning(
+            f"Cannot inspect dataset {dataset} because it has no `fields` attribute."
+        )
 
 
 class Docee(Dataset):
-    def __init__(self,
-                 df: pd.DataFrame,
-                 tokenizer: PreTrainedTokenizer,
-                 label2id: Optional[dict[str, int]] = None,
-                 return_tensors: str = "pt",
-                 *args, **kwargs
-                 ):
+    def __init__(
+        self,
+        df: pd.DataFrame,
+        tokenizer: PreTrainedTokenizer,
+        label2id: Optional[dict[str, int]] = None,
+        return_tensors: str = "pt",
+        *args,
+        **kwargs,
+    ):
         super().__init__()
         self.tokenizer: PreTrainedTokenizer = tokenizer
         self.text: list[str] = df.text.tolist()
@@ -56,11 +62,14 @@ class Docee(Dataset):
 
         # map labels to IDs
         self.label2id: dict[str, int] = label2id or {
-            label: i
-            for i, label in enumerate(sorted(df.event_type.unique().tolist()))}
+            label: i for i, label in enumerate(sorted(df.event_type.unique().tolist()))
+        }
         self.length = len(self.text)
 
-        self.fields = ["text", "labels"]  # shouldn't this be label?  # where is this even used
+        self.fields = [
+            "text",
+            "labels",
+        ]  # shouldn't this be label?  # where is this even used
         self.return_tensors = return_tensors
         # TODO - don't pass tokenizer, simply pass a partially applied encoding function
 
@@ -79,9 +88,7 @@ class Docee(Dataset):
         #   altho, that's not a priority for now, we could just hardcode it here
 
         batch_encoding = self.tokenizer(
-            text=self.text[idx],
-            truncation=True,
-            return_tensors=self.return_tensors
+            text=self.text[idx], truncation=True, return_tensors=self.return_tensors
         )
         label = self.label2id[self.labels[idx]]
         batch_encoding["labels"] = label
@@ -95,17 +102,19 @@ class Docee(Dataset):
 
 class DoceeWithArguments(Docee):
     def __init__(
-            self,
-            df: pd.DataFrame,
-            tokenizer: PreTrainedTokenizer,
-            label2id: Optional[dict[str, int]] = None,
-            *args, **kwargs
+        self,
+        df: pd.DataFrame,
+        tokenizer: PreTrainedTokenizer,
+        label2id: Optional[dict[str, int]] = None,
+        *args,
+        **kwargs,
     ):
         super().__init__(df, tokenizer, label2id, *args, **kwargs)
 
         # parse arguments
         self.arguments: list[list[Argument]] = list(
-            map(lambda s: list(arguments_from_str(s)), df.arguments.tolist()))
+            map(lambda s: list(arguments_from_str(s)), df.arguments.tolist())
+        )
 
         self.fields = ["text", "labels", "arguments"]
 
@@ -116,13 +125,13 @@ class DoceeWithArguments(Docee):
 
 class DoceeForInference(Dataset):
     def __init__(
-            self, 
-            df: pd.DataFrame,
-            use_title: bool = False,
-            concat: Optional[Callable[[Iterable[str]], str]] = concat_dot_join
+        self,
+        df: pd.DataFrame,
+        use_title: bool = False,
+        concat: Optional[Callable[[Iterable[str]], str]] = None,
     ):
         columns = ["title", "text"] if use_title else ["text"]
-        self.concat = concat
+        self.concat = concat if concat else concat_dot_join
         self.df = df.loc[:, columns]
 
     def __len__(self):
@@ -132,3 +141,18 @@ class DoceeForInference(Dataset):
         return self.concat(self.df.iloc[item])
 
 
+def subsample_one_per_source(df: pd.DataFrame) -> pd.DataFrame:
+    return df.groupby("source_doc_id").sample(1)
+
+
+def subsample_unique_text(df: pd.DataFrame) -> pd.DataFrame:
+    return df.groupby("text").sample(1)
+
+
+def custom_kfold(n_splits: int, df: pd.DataFrame):
+    df_noaug = df.loc[~df.source_doc_id.isna(), ["id", "tokens", "event_type"]]
+    df_aug = df.loc[df.source_doc_id.isna(), ["id", "tokens", "event_type"]]
+
+    skf = StratifiedKFold(n_splits, shuffle=True)
+    for train_idx, test_idx in skf.split(df_noaug.tokens, df_noaug.event_type):
+        yield np.concatenate((train_idx, df_aug.index.values)), test_idx
