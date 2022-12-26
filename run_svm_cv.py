@@ -31,12 +31,6 @@ def get_parser():
         help="If provided, will save scores to the given file.",
     )
     parser.add_argument(
-        "--output_path",
-        type=str,
-        required=True,
-        help="Path to which the results will be saved.",
-    )
-    parser.add_argument(
         "--min_df",
         type=int,
         required=False,
@@ -106,13 +100,13 @@ def main():
     )
 
     subsampler: Callable[[pd.DataFrame], pd.DataFrame]
-    if args.subsample_strategy is "all":
+    if args.subsample_strategy == "all":
         subsampler = identity
-    elif args.subsample_strategy is "one_per_source":
+    elif args.subsample_strategy == "one_per_source":
         from src.data import subsample_one_per_source
 
         subsampler = subsample_one_per_source
-    elif args.subsampler_strategy is "unique_text":
+    elif args.subsampler_strategy == "unique_text":
         from src.data import subsample_unique_text
 
         subsampler = subsample_unique_text
