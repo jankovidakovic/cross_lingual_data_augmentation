@@ -114,8 +114,12 @@ def main():
         raise ValueError(f"Unknown subsampler strategy: {args.subsample_strategy}")
 
     # subsample df_aug
-    df_noaug = df.loc[~df.source_doc_id.isna(), ["id", "tokens", "event_type"]]
-    df_aug = df.loc[df.source_doc_id.isna(), ["id", "tokens", "event_type"]]
+    df_noaug = df.loc[
+        df.source_doc_id.isna(), ["id", "tokens", "event_type", "source_doc_id"]
+    ]
+    df_aug = df.loc[
+        ~df.source_doc_id.isna(), ["id", "tokens", "event_type", "source_doc_id"]
+    ]
 
     logger.info(f"Amount of source documents is {len(df_noaug)}")
     logger.info(f"Amount of augmented documents before subsampling is {len(df_noaug)}")
@@ -135,6 +139,7 @@ def main():
         scoring="f1_macro",
         cv=custom_kfold(n_splits=args.num_folds, df=df),
         verbose=2,
+        n_jobs=args.n_jobs,
     )
 
     logger.info(f"Cross-validation finished. Printing scores.")
