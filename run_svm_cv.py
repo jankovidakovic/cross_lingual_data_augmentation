@@ -95,7 +95,7 @@ def main():
             ngram_range=(1, 3),
             lowercase=args.lowercase,
         ),
-        LinearSVC(verbose=True),
+        LinearSVC(),
         verbose=True,
     )
 
