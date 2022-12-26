@@ -114,12 +114,8 @@ def main():
         raise ValueError(f"Unknown subsampler strategy: {args.subsample_strategy}")
 
     # subsample df_aug
-    df_noaug = df.loc[
-        df.source_doc_id.isna(), ["id", "tokens", "event_type", "source_doc_id"]
-    ]
-    df_aug = df.loc[
-        ~df.source_doc_id.isna(), ["id", "tokens", "event_type", "source_doc_id"]
-    ]
+    df_noaug = df.loc[df.source_doc_id.isna(), :]
+    df_aug = df.loc[~df.source_doc_id.isna(), :]
 
     logger.info(f"Amount of source documents is {len(df_noaug)}")
     logger.info(f"Amount of augmented documents before subsampling is {len(df_noaug)}")
@@ -145,8 +141,8 @@ def main():
     logger.info(f"Cross-validation finished. Printing scores.")
     logger.info(pformat(scores))
 
-    logger.info(f"{np.mean(scores['text_score']) = }")
-    logger.info(f"{np.var(scores['text_score']) = }")
+    logger.info(f"{np.mean(scores['test_score']) = }")
+    logger.info(f"{np.var(scores['test_score']) = }")
 
     # TODO - implement full-blown classification metrics
     if args.save_scores_to:
