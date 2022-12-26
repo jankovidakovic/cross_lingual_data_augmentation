@@ -106,12 +106,12 @@ def main():
         from src.data import subsample_one_per_source
 
         subsampler = subsample_one_per_source
-    elif args.subsampler_strategy == "unique_text":
+    elif args.subsample_strategy == "unique_text":
         from src.data import subsample_unique_text
 
         subsampler = subsample_unique_text
     else:
-        raise ValueError(f"Unknown subsampler strategy: {args.subsampler_strategy}")
+        raise ValueError(f"Unknown subsampler strategy: {args.subsample_strategy}")
 
     # subsample df_aug
     df_noaug = df.loc[~df.source_doc_id.isna(), ["id", "tokens", "event_type"]]
@@ -119,7 +119,7 @@ def main():
 
     logger.info(f"Amount of source documents is {len(df_noaug)}")
     logger.info(f"Amount of augmented documents before subsampling is {len(df_noaug)}")
-    logger.info(f"Subsampling will be done using {args.subsampler_strategy} strategy.")
+    logger.info(f"Subsampling will be done using {args.subsample_strategy} strategy.")
     df_aug = subsampler(df_aug)
     logger.info(f"Amount of augmented documents after subsampling: {len(df_aug)}")
     df = pd.concat((df_noaug, df_aug), ignore_index=True)
