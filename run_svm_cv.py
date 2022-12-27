@@ -130,8 +130,12 @@ def main():
         df_aug = df.loc[~df.source_doc_id.isna(), :]
 
         logger.info(f"Amount of source documents is {len(df_noaug)}")
-        logger.info(f"Amount of augmented documents before subsampling is {len(df_noaug)}")
-        logger.info(f"Subsampling will be done using {args.subsample_strategy} strategy.")
+        logger.info(
+            f"Amount of augmented documents before subsampling is {len(df_noaug)}"
+        )
+        logger.info(
+            f"Subsampling will be done using {args.subsample_strategy} strategy."
+        )
         df_aug = subsampler(df_aug)
         logger.info(f"Amount of augmented documents after subsampling: {len(df_aug)}")
         df = pd.concat((df_noaug, df_aug), ignore_index=True)
@@ -148,7 +152,9 @@ def main():
         df.tokens.values,
         df.event_type.values,
         scoring="f1_macro",
-        cv=custom_kfold(n_splits=args.num_folds, df=df) if args.is_augmented else StratifiedKFold(n_splits=args.num_folds)
+        cv=custom_kfold(n_splits=args.num_folds, df=df)
+        if args.is_augmented
+        else StratifiedKFold(n_splits=args.num_folds),
         verbose=2,
         n_jobs=args.n_jobs,
     )
