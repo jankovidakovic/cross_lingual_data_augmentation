@@ -9,7 +9,7 @@ import pandas as pd
 import numpy as np
 from pandas.core.arrays.datetimelike import Callable
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.model_selection import cross_validate
+from sklearn.model_selection import StratifiedKFold, cross_validate
 from sklearn.pipeline import make_pipeline
 from sklearn.svm import LinearSVC
 
@@ -23,6 +23,17 @@ def get_parser():
     parser = ArgumentParser()
     parser.add_argument(
         "--dataset_path", type=str, required=True, help="Path to the dataset"
+    )
+    parser.add_argument(
+        "--is_augmented",
+        action="store_true",
+        help="If set, it denotes that the dataset contains augmented examples."
+        "Consequently, a custom folding strategy will be used, with two important "
+        "properties. Firstly, the held-out sets will contain only examples from the "
+        "non-augmented part of the dataset (and chosen in a stratified manner)."
+        "Secondly, the train sets will never contain augmented examples for which "
+        "the source document is in a hold-out set. The second property is important "
+        "to ensure no data leakage.",
     )
     parser.add_argument(
         "--save_scores_to",
@@ -136,7 +147,7 @@ def main():
         df.tokens.values,
         df.event_type.values,
         scoring="f1_macro",
-        cv=custom_kfold(n_splits=args.num_folds, df=df),
+        cv=custom_kfold(n_splits=args.num_folds, df=df) if args.is_augmented else StratifiedKFold(n_splits=args.num_folds)
         verbose=2,
         n_jobs=args.n_jobs,
     )
