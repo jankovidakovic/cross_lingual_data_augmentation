@@ -110,36 +110,37 @@ def main():
         verbose=True,
     )
 
-    subsampler: Callable[[pd.DataFrame], pd.DataFrame]
-    if args.subsample_strategy == "all":
-        subsampler = identity
-    elif args.subsample_strategy == "one_per_source":
-        from src.data import subsample_one_per_source
+    if args.is_augmented:
+        subsampler: Callable[[pd.DataFrame], pd.DataFrame]
+        if args.subsample_strategy == "all":
+            subsampler = identity
+        elif args.subsample_strategy == "one_per_source":
+            from src.data import subsample_one_per_source
 
-        subsampler = subsample_one_per_source
-    elif args.subsample_strategy == "unique_text":
-        from src.data import subsample_unique_text
+            subsampler = subsample_one_per_source
+        elif args.subsample_strategy == "unique_text":
+            from src.data import subsample_unique_text
 
-        subsampler = subsample_unique_text
-    else:
-        raise ValueError(f"Unknown subsampler strategy: {args.subsample_strategy}")
+            subsampler = subsample_unique_text
+        else:
+            raise ValueError(f"Unknown subsampler strategy: {args.subsample_strategy}")
 
-    # subsample df_aug
-    df_noaug = df.loc[df.source_doc_id.isna(), :]
-    df_aug = df.loc[~df.source_doc_id.isna(), :]
+        # subsample df_aug
+        df_noaug = df.loc[df.source_doc_id.isna(), :]
+        df_aug = df.loc[~df.source_doc_id.isna(), :]
 
-    logger.info(f"Amount of source documents is {len(df_noaug)}")
-    logger.info(f"Amount of augmented documents before subsampling is {len(df_noaug)}")
-    logger.info(f"Subsampling will be done using {args.subsample_strategy} strategy.")
-    df_aug = subsampler(df_aug)
-    logger.info(f"Amount of augmented documents after subsampling: {len(df_aug)}")
-    df = pd.concat((df_noaug, df_aug), ignore_index=True)
-    df.reset_index(drop=True, inplace=True)
-    # set ids (needed for kfold)
-    df.drop(columns="id", inplace=True)
-    df.reset_index(names="id", inplace=True)
+        logger.info(f"Amount of source documents is {len(df_noaug)}")
+        logger.info(f"Amount of augmented documents before subsampling is {len(df_noaug)}")
+        logger.info(f"Subsampling will be done using {args.subsample_strategy} strategy.")
+        df_aug = subsampler(df_aug)
+        logger.info(f"Amount of augmented documents after subsampling: {len(df_aug)}")
+        df = pd.concat((df_noaug, df_aug), ignore_index=True)
+        df.reset_index(drop=True, inplace=True)
+        # set ids (needed for kfold)
+        df.drop(columns="id", inplace=True)
+        df.reset_index(names="id", inplace=True)
 
-    logger.info(f"Final amount of examples is {len(df)}")
+        logger.info(f"Final amount of examples is {len(df)}")
 
     # run cross-validation
     scores = cross_validate(
