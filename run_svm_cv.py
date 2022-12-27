@@ -123,7 +123,10 @@ def main():
     df_aug = subsampler(df_aug)
     logger.info(f"Amount of augmented documents after subsampling: {len(df_aug)}")
     df = pd.concat((df_noaug, df_aug), ignore_index=True)
-    df.reset_index(drop=True, inplace=True)  # ignore id
+    df.reset_index(drop=True, inplace=True)
+    # set ids (needed for kfold)
+    df.drop(columns="id", inplace=True)
+    df.reset_index(names="id", inplace=True)
 
     logger.info(f"Final amount of examples is {len(df)}")
 
