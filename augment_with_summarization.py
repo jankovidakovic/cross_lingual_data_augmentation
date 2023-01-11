@@ -350,7 +350,7 @@ def main():
 
     # TODO - save hyperparameter info, or do dataset versioning via W&B
 
-    df_to_save.to_csv(args.output_path, index_label="id")
+    df_to_save.to_csv(args.output_path, index_label="id", escapechar="\\")
     logger.info(f"Successfully saved resulting dataset at path  {os.path.abspath(args.output_path)}")
 
 
