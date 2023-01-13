@@ -1,36 +1,29 @@
-import torch
 import torch.nn as nn
 from transformers import BartConfig
-from transformers.models.bart.modeling_bart import BartEncoder, BartDecoder, BartModel
+from transformers.models.bart.modeling_bart import BartForSequenceClassification, BartForConditionalGeneration
 
 
-class MultiTaskTransformer(nn.Module):
-    def __init__(self, config: BartConfig, *args, **kwargs):
-        super().__init__()
-        self.transformer = BartModel(config)
-        self.encoder: BartEncoder = self.transformer.get_encoder()
-        self.decoder: BartDecoder = self.transformer.get_decoder()
-        self.cls_head = None
-        self.language_modelling_head = nn.Linear(
-            config.d_model, self.transformer.shared.num_embeddings,
-            bias=False
-        )  # why no bias here?
+class BartForEventDetectionAndSummarization(nn.Module):
+    def __init__(self, cls_config: BartConfig, summ_config: BartConfig, *args, **kwargs):
+        self.cls_model = BartForSequenceClassification(cls_config)
+        self.summ_model = BartForConditionalGeneration(summ_config)
+        # TODO - config or from_pretrained??
 
-    def forward(self):
-        raise NotImplementedError(
-            f"forward is not implemented for {self.__class__.__name__}."
-            "Use either `forward_sequence_classification` or `forward_language_modelling`"
-        )
+        # share embeddings, encoder and decoder
+        self.cls_model.model.shared = self.summ_model.model.shared
+        self.cls_model.model.encoder = self.summ_model.model.encoder
+        self.cls_model.model.decoder = self.summ_model.model.decoder
 
-    def forward_sequence_classification(self, input):
-        # forward encoder
-        # forward linear classification head
-        # return logits
-        pass
+        # what is not shared is the classification head
+        # cls_model has the BartClassificationHead
+        # summ_model has lm_head (which does language modelling)
 
-    def forward_language_modelling(self, input):
-        # forward whole model
-        # forward LM head
-        # return logits
-        pass
+    def forward(self, *args, **kwargs):
+        raise NotImplementedError(f"If you want to do classification, use `forward_cls`. For summarization, use `forward_summ`.")
+
+    def forward_cls(self, *args, **kwargs):
+        return self.cls_model.forward(*args, **kwargs)
+
+    def forward_summ(self, *args, **kwargs):
+        return self.summ_model.forward(*args, **kwargs)
 
