@@ -1,13 +1,18 @@
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from functools import partial
 from pprint import pformat
 from typing import Optional, Sequence, Generator, Callable, Iterable
 
 import pandas as pd
+from datasets import load_dataset, ClassLabel
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer
 
 from src.utils import concat_dot_join
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -83,9 +88,11 @@ class Docee(Dataset):
             truncation=True,
             return_tensors=self.return_tensors
         )
+        # makes no sense to do the tokenization here tbh
         label = self.label2id[self.labels[idx]]
         batch_encoding["labels"] = label
-        logging.info(f"Got item: {pformat(batch_encoding)}")
+        # logging.info(f"Got item: {pformat(batch_encoding)}")
+        print(f"got item: {pformat(batch_encoding)}")
         return batch_encoding
         # return self.text[idx], self.labels[idx]
         # we could probably tokenize this, right?
@@ -132,3 +139,98 @@ class DoceeForInference(Dataset):
         return self.concat(self.df.iloc[item])
 
 
+def preprocess_docee(examples, tokenizer, model_max_length=512):
+    batch_encoding = tokenizer(
+        examples["text"],
+        truncation=True,
+        max_length=tokenizer.model_max_length or model_max_length
+    )
+    batch_encoding["labels"] = examples["event_type"]
+    return batch_encoding
+
+
+def preprocess_cnn(examples, tokenizer, max_input_length=512, max_target_length=100):
+    batch_encoding = tokenizer(
+        examples["article"],
+        max_length=tokenizer.model_max_length or max_input_length,
+        truncation=True
+    )
+
+    # tokenize the labels
+    tokenized_highlights = tokenizer(
+        examples["highlights"],
+        max_length=max_target_length,
+        truncation=True
+    )
+
+    batch_encoding["labels"] = tokenized_highlights["input_ids"]
+    return batch_encoding
+
+
+def setup_dataset_split(
+        dataset: Dataset,
+        split: str,
+        preprocessing: Callable[[dict], dict],
+        n_examples: Optional[int] = None
+):
+    if n_examples:
+        logger.warning(f"Dataset contains {len(dataset)} examples, but only {n_examples} will be kept.")
+        dataset = dataset[split].shuffle().select(range(n_examples))
+    return dataset\
+        .map(preprocessing, batched=True, remove_columns=dataset["train"].column_names)\
+        .with_format("torch")
+
+
+def setup_cnn(
+        tokenizer: PreTrainedTokenizer,
+        train_size: Optional[int], eval_size: Optional[int]):
+    dataset = load_dataset("cnn_dailymail", "3.0.0", splits=["train", "validation"])
+    setup_cnn_split = partial(
+        setup_dataset_split,
+        dataset=dataset,
+        preprocessing=partial(
+            preprocess_cnn,
+            tokenizer=tokenizer
+        )
+    )
+    cnn_train = setup_cnn_split(split="train", n_examples=train_size)
+    cnn_eval = setup_cnn_split(split="validation", n_examples=eval_size)
+
+    return cnn_train, cnn_eval
+
+
+def setup_docee(
+        train_path: str, eval_path: str,
+        tokenizer: PreTrainedTokenizer,
+        train_size: Optional[int] = None, eval_size: Optional[int] = None):
+    dataset = load_dataset("csv", data_files={
+        "train": train_path,
+        "validation": eval_path
+    })
+    event_names = dataset["train"].unique("event_type")
+    dataset = dataset.cast_column(
+        "event_type",
+        ClassLabel(num_classes=len(event_names))
+    )
+
+    setup_docee_split = partial(
+        setup_dataset_split,
+        dataset=dataset,
+        preprocessing=partial(
+            preprocess_docee,
+            tokenizer=tokenizer
+        )
+    )
+    docee_train = setup_docee_split(split="train", n_examples=train_size)
+    docee_eval = setup_docee_split(split="validation", n_examples=eval_size)
+
+    return docee_train, docee_eval
+
+
+# TODO:
+#   run_multitask_learning.py
+#   run_multitask_learning.sh
+#   wandb integration
+#   smarter stepping (not every epoch)
+#   loss weighing
+#   independent evaluation (summarization or classification)
