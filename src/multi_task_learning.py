@@ -9,12 +9,15 @@ import evaluate
 import numpy as np
 import torch
 from accelerate import Accelerator
+from torch import nn
 from torch.optim import Optimizer, AdamW
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
-from transformers import PreTrainedModel, DataCollator, PreTrainedTokenizer
+from transformers import PreTrainedModel, DataCollator, PreTrainedTokenizer, BartForSequenceClassification, \
+    BartForConditionalGeneration
 
 from src.summarization import postprocess_for_rouge
+from src.utils import check_shared_weights
 
 logger = logging.getLogger(__name__)
 
@@ -36,12 +39,6 @@ class TrainableTask:
         self.optimizer = self.accelerator.prepare_optimizer(self.optimizer)
         self.train_dataloader = self.accelerator.prepare_data_loader(self.train_dataloader)
         self.eval_dataloader = self.accelerator.prepare_data_loader(self.eval_dataloader)
-
-
-def get_classification_dataloader(
-        dataset: Dataset,
-        shuffle: bool,
-): pass  # this would just be the constructor
 
 
 def prepare_task(
@@ -79,27 +76,195 @@ def prepare_task(
         accelerator=accelerator
     )
 
+
+def setup_models(pretrained_model_name_or_path: str):
+    classification_model = BartForSequenceClassification.from_pretrained(pretrained_model_name_or_path)
+    logger.info(f"===== Classification model =====")
+    logger.info(pformat(classification_model))
+
+    summarization_model = BartForConditionalGeneration.from_pretrained(pretrained_model_name_or_path)
+    logger.info(f"===== Summarization model =====")
+    logger.info(pformat(summarization_model))
+
+    # make models share the embeddings, encoder, and decoder
+    logger.info(f"Models will share weights of the following layers: 'shared', 'encoder' and 'decoder'")
+    summarization_model.model.shared = classification_model.model.shared
+    summarization_model.model.encoder = classification_model.model.encoder
+    summarization_model.model.decoder = classification_model.model.decoder
+
+    check_shared_weights(
+        summarization_model,
+        classification_model,
+        ["model.shared", "model.encoder", "model.decoder"]
+    )
+
+    return {
+        "summarization": summarization_model,
+        "classification": classification_model
+    }
+
 # we cannot partial on anything except "name"
 #   -> collate_fn depends on the tokenizer
 #   -> datasets also depend on the tokenizer
 #       -> those two things could be done at the same place
 
 
-def set_train(train_mode: bool, tasks: dict[str, TrainableTask]):
-    for name, task in tasks.items():
-        logger.info(f"setting {name} task to train={train_mode}")
+def set_train(train_mode: bool, *tasks):
+    for task in tasks:
         task.model.train(train_mode)
+
+
+def evaluate_summarization(
+        global_step: int,
+        eval_dataloader: DataLoader,
+        accelerator: Accelerator,
+        model: nn.Module,
+        tokenizer: PreTrainedTokenizer,
+):
+    rouge_score = evaluate.load("rouge")
+
+    for step, batch in tqdm(
+            enumerate(eval_dataloader),
+            desc=f"[GLOBAL_STEP = {global_step}] Evaluating summarization performance",
+            total=len(eval_dataloader)
+    ):
+        with torch.no_grad():
+            # generate summaries
+            generated_tokens = accelerator.unwrap_model(model).generate(
+                batch["input_ids"],
+                attention_mask=batch["attention_mask"],
+            )  # aha! we can plug the generation parameters here
+
+            # pad to max length
+            generated_tokens = accelerator.pad_across_processes(
+                generated_tokens, dim=1, pad_index=tokenizer.pad_token_id
+            )
+            labels = batch["labels"]
+
+            # If we did not pad to max length, we need to pad the labels too
+            labels = accelerator.pad_across_processes(
+                labels, dim=1, pad_index=tokenizer.pad_token_id
+            )
+
+            generated_tokens = accelerator.gather(generated_tokens).cpu().numpy()
+            labels = accelerator.gather(labels).cpu().numpy()
+
+            # Replace -100 in the labels as we can't decode them
+            labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
+            if isinstance(generated_tokens, tuple):
+                generated_tokens = generated_tokens[0]
+
+            # decode generated tokens into words (predicted summaries)
+            decoded_preds = tokenizer.batch_decode(
+                generated_tokens, skip_special_tokens=True
+            )
+            # decode labels into summaries
+            decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
+
+            # preprocess for rouge
+            decoded_preds, decoded_labels = postprocess_for_rouge(
+                decoded_preds, decoded_labels
+            )
+
+            rouge_score.add_batch(predictions=decoded_preds, references=decoded_labels)
+
+    # Compute metrics
+    result = rouge_score.compute()
+
+    # Extract the median ROUGE scores
+    result = {key: round(value * 100, 4) for key, value in result.items()}
+    logger.info(f"[GLOBAL_STEP={global_step}] ======= Evaluation results =======")
+    logger.info(pformat(result))
+    logger.info("Evaluation complete.")
+
+
+def evaluate_classification(
+    global_step: int,
+    eval_dataloader: DataLoader,
+    accelerator: Accelerator,
+    model: nn.Module
+):
+    metrics = {
+        "f1": evaluate.load("f1"),
+        "precision": evaluate.load("precision"),
+        "recall": evaluate.load("recall")
+    }
+    for batch in tqdm(
+            eval_dataloader,
+            total=len(eval_dataloader),
+            desc=f"[GLOBAL_STEP={global_step}] Evaluating classification performance"):
+        # extract outputs
+        outputs = accelerator.unwrap_model(model)(**batch)
+
+        # decode logits into labels
+        predictions = torch.argmax(outputs["logits"], dim=1)
+        predictions = accelerator.gather(predictions).cpu().numpy()
+
+        for metric in metric.values():
+            metric.add_batch(
+                predictions=predictions,
+                references=batch["labels"].cpu().numpy(),
+            )
+
+
+    logger.info(f"[GLOBAL_STEP={global_step}] ======= Evaluation results =======")
+    for metric_name, metric in metrics.items():
+        result = metric.compute(average="macro")
+        logger.info(pformat(result))
+
+    logger.info("Evaluation complete.")
+
+
+def save_everything(
+        tasks: dict[str, TrainableTask],
+        output_dir: str,
+        global_step: int,
+        tokenizer: PreTrainedTokenizer
+):
+    save_dir = os.path.join(
+        output_dir,
+        f"checkpoint-{global_step}"
+    )
+    for task in tasks:
+        model_save_dir = os.path.join(save_dir, task)
+        logger.warning(f"Saving {task} model to {os.path.abspath(model_save_dir)}")
+        save_model(
+            model=tasks[task].model,
+            accelerator=tasks[task].accelerator,
+            output_dir=model_save_dir
+        )
+        logger.warning(f"{task} model successfully saved to {os.path.abspath(model_save_dir)}")
+
+    if tasks["classification"].accelerator.is_main_process:
+        logger.warning(f"Saving tokenizer to {os.path.abspath(save_dir)}")
+        tokenizer.save_pretrained(save_dir)
+        logger.warning(f"Successfully saved tokenizer to {os.path.abspath(save_dir)}")
+
+
+def save_model(
+        model: PreTrainedModel,
+        accelerator: Accelerator,
+        output_dir: str
+):
+    os.makedirs(output_dir, exist_ok=True)
+    accelerator.wait_for_everyone()
+    unwrapped_model = accelerator.unwrap_model(model)
+    unwrapped_model.save_pretrained(
+        output_dir,
+        save_function=accelerator.save
+    )
+    logger.warning(f"Saved model checkpoint to {os.path.abspath(output_dir)}")
 
 
 def train(
         tasks: dict[str, TrainableTask],
         num_epochs: int,
         tokenizer: PreTrainedTokenizer,
-        output_dir: str
+        output_dir: str,
+        cls_eval_steps: int,
+        summ_eval_steps: int,
+        save_steps: int
 ):
-    rouge_score = evaluate.load("rouge")
-    classification_f1 = evaluate.load("f1")
-
     classification_task = tasks["classification"]
     summarization_task = tasks["summarization"]
 
@@ -115,6 +280,7 @@ def train(
                        f"{data_ratio * len(classification_task.train_dataloader)} examples.")
 
 
+    global_step = 0
     for epoch in tqdm(range(num_epochs), desc="Epoch", total=num_epochs):
 
         # load training data, step by step
@@ -140,6 +306,8 @@ def train(
         num_epoch_steps = len(summarization_task.train_dataloader) * 2
 
         for step in range(num_epoch_steps):
+            global_step += 1
+
             if step % 2 == 0: # train summarization
                 task = "summarization"
             else:
@@ -154,6 +322,38 @@ def train(
                 tasks[task].optimizer.zero_grad()
                 progress_bars[task].update(1)
 
+            if global_step % cls_eval_steps == 0:
+                set_train(False, tasks["classification"])
+                evaluate_classification(
+                    global_step=global_step,
+                    eval_dataloader=tasks["classification"].eval_dataloader,
+                    accelerator=tasks["classification"].accelerator,
+                    model=tasks["classification"].model
+                )
+                set_train(True, tasks["classification"])
+
+            if global_step % summ_eval_steps == 0:
+                set_train(False, tasks["summarization"])
+                evaluate_summarization(
+                    global_step=global_step,
+                    eval_dataloader=tasks["summarization"].eval_dataloader,
+                    accelerator=tasks["summarization"].accelerator,
+                    model=tasks["summarization"].model,
+                    tokenizer=tokenizer
+                )
+                set_train(True, tasks["summarization"])
+
+            if global_step % save_steps == 0:
+                save_everything(
+                    tasks=tasks,
+                    output_dir=output_dir,
+                    global_step=global_step,
+                    tokenizer=tokenizer
+                )
+
+
+        # deep learning would be so cool to do with monads, no?
+
         # TODO - loss weighing
 
         # idea -> instead of alternating batches, we could scale losses
@@ -166,104 +366,12 @@ def train(
         #
         # would this work, and why not?
         #   where are the real/fake examples?
-        #
-
-        # evaluation at the end of epoch
-
-        ## evaluation
-        set_train(False, tasks)
-
-        # evaluate summarization
-        # accelerator = tasks["summarization"]["accelerator"]
-        eval_dataloader = tasks["summarization"].eval_dataloader
-        accelerator = tasks["summarization"].accelerator
-        for step, batch in tqdm(
-                enumerate(eval_dataloader),
-                desc=f"Summarization evaluation in epoch {epoch+1}",
-                total=len(eval_dataloader)
-        ):
-            with torch.no_grad():
-                generated_tokens = accelerator.unwrap_model(tasks["summarization"].model).generate(
-                    batch["input_ids"],
-                    attention_mask=batch["attention_mask"],
-                )  # aha! we can plug the generation parameters here
-
-                generated_tokens = accelerator.pad_across_processes(
-                    generated_tokens, dim=1, pad_index=tokenizer.pad_token_id
-                )
-                labels = batch["labels"]
-
-                # If we did not pad to max length, we need to pad the labels too
-                labels = accelerator.pad_across_processes(
-                    labels, dim=1, pad_index=tokenizer.pad_token_id
-                )
-
-                generated_tokens = accelerator.gather(generated_tokens).cpu().numpy()
-                labels = accelerator.gather(labels).cpu().numpy()
-
-                # Replace -100 in the labels as we can't decode them
-                labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
-                if isinstance(generated_tokens, tuple):
-                    generated_tokens = generated_tokens[0]
-                decoded_preds = tokenizer.batch_decode(
-                    generated_tokens, skip_special_tokens=True
-                )
-                decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
-
-                decoded_preds, decoded_labels = postprocess_for_rouge(
-                    decoded_preds, decoded_labels
-                )
-
-                rouge_score.add_batch(predictions=decoded_preds, references=decoded_labels)
-
-        # Compute metrics
-        result = rouge_score.compute()
-        # Extract the median ROUGE scores
-        result = {key: value * 100 for key, value in result.items()}
-        result = {k: round(v, 4) for k, v in result.items()}
-        logger.info(f"[SUMM] Epoch {epoch+1}:", pformat(result))
-
-        epoch_output_dir = os.path.join(output_dir, f"epoch_{epoch}")
-        os.makedirs(epoch_output_dir, exist_ok=True)
-        summarization_save_dir = os.path.join(epoch_output_dir, "summ")
-        os.makedirs(summarization_save_dir, exist_ok=True)
-        # Save and upload
-        accelerator.wait_for_everyone()
-        unwrapped_model = accelerator.unwrap_model(tasks["summarization"].model)
-        unwrapped_model.save_pretrained(
-            summarization_save_dir,
-            save_function=accelerator.save
-        )
-        logger.warning(f"Saved summarization checkpoint to {os.path.abspath(summarization_save_dir)}")
-        if accelerator.is_main_process:
-            tokenizer.save_pretrained(epoch_output_dir)  # ovo treba samo jednom realno
-            logger.warning(f"Saved tokenizer config to {os.path.abspath(epoch_output_dir)}")
-
-        # evaluate classification
-        eval_dataloader = tasks["classification"].eval_dataloader
-        accelerator = tasks["classification"].accelerator
-        model = tasks["classification"].model
-        for batch in tqdm(eval_dataloader, total=len(eval_dataloader), desc="[CLS] Evaluation"):
-            # extract outputs
-            outputs = accelerator.unwrap_model(model)(**batch)
-
-            # decode logits into labels
-            predictions = torch.argmax(outputs["logits"], dim=1)
-            predictions = accelerator.gather(predictions).cpu().numpy()
-            # print(labels)
-            classification_f1.add_batch(
-                predictions=predictions,
-                references=batch["labels"].cpu().numpy(),
-            )
-        result = classification_f1.compute(average="macro")
-        print(f"[CLS] Epoch {epoch+1}: {pformat(result)}")
-
-        classification_output_dir = os.path.join(epoch_output_dir, "cls")
-        os.makedirs(classification_output_dir, exist_ok=True)
-        # Save and upload
-        accelerator.wait_for_everyone()
-        unwrapped_model = accelerator.unwrap_model(model)
-        unwrapped_model.save_pretrained(classification_output_dir, save_function=accelerator.save)
-        logger.warning(f"Saved classification model to {os.path.abspath(classification_output_dir)}")
 
     logger.info(f"Training complete.")
+    # save final checkpoint
+    save_everything(
+        tasks,
+        output_dir=output_dir,
+        global_step=global_step,
+        tokenizer=tokenizer
+    )
