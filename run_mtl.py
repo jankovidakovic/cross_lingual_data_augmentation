@@ -209,7 +209,7 @@ def main():
     # create trainable tasks
     logger.info(f"Setting up the classification task...")
     cls_collator = DataCollatorWithPadding(
-        tokenizer=tokenizer, padding=PaddingStrategy.MAX_LENGTH, return_tensors="pt"
+        tokenizer=tokenizer, padding=PaddingStrategy.LONGEST, return_tensors="pt"
     )
 
     classification_task = prepare_task(
@@ -227,7 +227,7 @@ def main():
 
     logger.info(f"Setting up the summarization task...")
     summ_collator = DataCollatorForSeq2Seq(
-        tokenizer=tokenizer, padding=PaddingStrategy.MAX_LENGTH, return_tensors="pt"
+        tokenizer=tokenizer, padding=PaddingStrategy.LONGEST, return_tensors="pt"
     )
     summarization_task = prepare_task(
         name="summarization",
