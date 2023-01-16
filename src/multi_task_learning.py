@@ -344,7 +344,7 @@ def train(
                 loss = outputs.loss
                 tasks[task].accelerator.backward(loss)
                 tasks[task].optimizer.step()
-                tasks[task].lr_scheduler.step()
+                # tasks[task].lr_scheduler.step()
                 tasks[task].optimizer.zero_grad()
                 progress_bars[task].update(1)
 
