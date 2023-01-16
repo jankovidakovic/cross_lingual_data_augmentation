@@ -13,8 +13,13 @@ from torch import nn
 from torch.optim import Optimizer, AdamW
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
-from transformers import PreTrainedModel, DataCollator, PreTrainedTokenizer, BartForSequenceClassification, \
-    BartForConditionalGeneration
+from transformers import (
+    PreTrainedModel,
+    DataCollator,
+    PreTrainedTokenizer,
+    BartForSequenceClassification,
+    BartForConditionalGeneration,
+)
 
 from src.summarization import postprocess_for_rouge
 from src.utils import check_shared_weights
@@ -37,20 +42,24 @@ class TrainableTask:
         # acceleration, babyyy
         self.model = self.accelerator.prepare_model(self.model)
         self.optimizer = self.accelerator.prepare_optimizer(self.optimizer)
-        self.train_dataloader = self.accelerator.prepare_data_loader(self.train_dataloader)
-        self.eval_dataloader = self.accelerator.prepare_data_loader(self.eval_dataloader)
+        self.train_dataloader = self.accelerator.prepare_data_loader(
+            self.train_dataloader
+        )
+        self.eval_dataloader = self.accelerator.prepare_data_loader(
+            self.eval_dataloader
+        )
 
 
 def prepare_task(
-        name: str,
-        model: PreTrainedModel,
-        train_dataset: Dataset,
-        eval_dataset: Dataset,
-        learning_rate: float,  # comes from optimizer
-        per_device_train_batch_size: int,
-        per_device_eval_batch_size: int,
-        gradient_accumulation_steps: int,
-        collate_fn: DataCollator
+    name: str,
+    model: PreTrainedModel,
+    train_dataset: Dataset,
+    eval_dataset: Dataset,
+    learning_rate: float,  # comes from optimizer
+    per_device_train_batch_size: int,
+    per_device_eval_batch_size: int,
+    gradient_accumulation_steps: int,
+    collate_fn: DataCollator,
 ) -> TrainableTask:
     optimizer = AdamW(model.parameters(), lr=learning_rate)
     train_dataloader = DataLoader(
@@ -58,13 +67,13 @@ def prepare_task(
         batch_size=per_device_train_batch_size,
         shuffle=True,
         collate_fn=collate_fn,
-        pin_memory=True
+        pin_memory=True,
     )
     eval_dataloader = DataLoader(
         eval_dataset,
         batch_size=per_device_eval_batch_size,
         collate_fn=collate_fn,
-        pin_memory=True
+        pin_memory=True,
     )
     accelerator = Accelerator(gradient_accumulation_steps=gradient_accumulation_steps)
     return TrainableTask(
@@ -73,21 +82,27 @@ def prepare_task(
         optimizer=optimizer,
         train_dataloader=train_dataloader,
         eval_dataloader=eval_dataloader,
-        accelerator=accelerator
+        accelerator=accelerator,
     )
 
 
 def setup_models(pretrained_model_name_or_path: str):
-    classification_model = BartForSequenceClassification.from_pretrained(pretrained_model_name_or_path)
+    classification_model = BartForSequenceClassification.from_pretrained(
+        pretrained_model_name_or_path
+    )
     logger.info(f"===== Classification model =====")
     logger.info(pformat(classification_model))
 
-    summarization_model = BartForConditionalGeneration.from_pretrained(pretrained_model_name_or_path)
+    summarization_model = BartForConditionalGeneration.from_pretrained(
+        pretrained_model_name_or_path
+    )
     logger.info(f"===== Summarization model =====")
     logger.info(pformat(summarization_model))
 
     # make models share the embeddings, encoder, and decoder
-    logger.info(f"Models will share weights of the following layers: 'shared', 'encoder' and 'decoder'")
+    logger.info(
+        f"Models will share weights of the following layers: 'shared', 'encoder' and 'decoder'"
+    )
     summarization_model.model.shared = classification_model.model.shared
     summarization_model.model.encoder = classification_model.model.encoder
     summarization_model.model.decoder = classification_model.model.decoder
@@ -95,13 +110,14 @@ def setup_models(pretrained_model_name_or_path: str):
     check_shared_weights(
         summarization_model,
         classification_model,
-        ["model.shared", "model.encoder", "model.decoder"]
+        ["model.shared", "model.encoder", "model.decoder"],
     )
 
     return {
         "summarization": summarization_model,
-        "classification": classification_model
+        "classification": classification_model,
     }
+
 
 # we cannot partial on anything except "name"
 #   -> collate_fn depends on the tokenizer
@@ -115,18 +131,18 @@ def set_train(train_mode: bool, *tasks):
 
 
 def evaluate_summarization(
-        global_step: int,
-        eval_dataloader: DataLoader,
-        accelerator: Accelerator,
-        model: nn.Module,
-        tokenizer: PreTrainedTokenizer,
+    global_step: int,
+    eval_dataloader: DataLoader,
+    accelerator: Accelerator,
+    model: nn.Module,
+    tokenizer: PreTrainedTokenizer,
 ):
     rouge_score = evaluate.load("rouge")
 
     for step, batch in tqdm(
-            enumerate(eval_dataloader),
-            desc=f"[GLOBAL_STEP = {global_step}] Evaluating summarization performance",
-            total=len(eval_dataloader)
+        enumerate(eval_dataloader),
+        desc=f"[GLOBAL_STEP = {global_step}] Evaluating summarization performance",
+        total=len(eval_dataloader),
     ):
         with torch.no_grad():
             # generate summaries
@@ -182,17 +198,18 @@ def evaluate_classification(
     global_step: int,
     eval_dataloader: DataLoader,
     accelerator: Accelerator,
-    model: nn.Module
+    model: nn.Module,
 ):
     metrics = {
         "f1": evaluate.load("f1"),
         "precision": evaluate.load("precision"),
-        "recall": evaluate.load("recall")
+        "recall": evaluate.load("recall"),
     }
     for batch in tqdm(
-            eval_dataloader,
-            total=len(eval_dataloader),
-            desc=f"[GLOBAL_STEP={global_step}] Evaluating classification performance"):
+        eval_dataloader,
+        total=len(eval_dataloader),
+        desc=f"[GLOBAL_STEP={global_step}] Evaluating classification performance",
+    ):
         # extract outputs
         outputs = accelerator.unwrap_model(model)(**batch)
 
@@ -206,7 +223,6 @@ def evaluate_classification(
                 references=batch["labels"].cpu().numpy(),
             )
 
-
     logger.info(f"[GLOBAL_STEP={global_step}] ======= Evaluation results =======")
     for metric_name, metric in metrics.items():
         result = metric.compute(average="macro")
@@ -216,24 +232,23 @@ def evaluate_classification(
 
 
 def save_everything(
-        tasks: dict[str, TrainableTask],
-        output_dir: str,
-        global_step: int,
-        tokenizer: PreTrainedTokenizer
+    tasks: dict[str, TrainableTask],
+    output_dir: str,
+    global_step: int,
+    tokenizer: PreTrainedTokenizer,
 ):
-    save_dir = os.path.join(
-        output_dir,
-        f"checkpoint-{global_step}"
-    )
+    save_dir = os.path.join(output_dir, f"checkpoint-{global_step}")
     for task in tasks:
         model_save_dir = os.path.join(save_dir, task)
         logger.warning(f"Saving {task} model to {os.path.abspath(model_save_dir)}")
         save_model(
             model=tasks[task].model,
             accelerator=tasks[task].accelerator,
-            output_dir=model_save_dir
+            output_dir=model_save_dir,
         )
-        logger.warning(f"{task} model successfully saved to {os.path.abspath(model_save_dir)}")
+        logger.warning(
+            f"{task} model successfully saved to {os.path.abspath(model_save_dir)}"
+        )
 
     if tasks["classification"].accelerator.is_main_process:
         logger.warning(f"Saving tokenizer to {os.path.abspath(save_dir)}")
@@ -241,44 +256,50 @@ def save_everything(
         logger.warning(f"Successfully saved tokenizer to {os.path.abspath(save_dir)}")
 
 
-def save_model(
-        model: PreTrainedModel,
-        accelerator: Accelerator,
-        output_dir: str
-):
+def save_model(model: PreTrainedModel, accelerator: Accelerator, output_dir: str):
     os.makedirs(output_dir, exist_ok=True)
     accelerator.wait_for_everyone()
     unwrapped_model = accelerator.unwrap_model(model)
-    unwrapped_model.save_pretrained(
-        output_dir,
-        save_function=accelerator.save
-    )
+    unwrapped_model.save_pretrained(output_dir, save_function=accelerator.save)
     logger.warning(f"Saved model checkpoint to {os.path.abspath(output_dir)}")
 
 
 def train(
-        tasks: dict[str, TrainableTask],
-        num_epochs: int,
-        tokenizer: PreTrainedTokenizer,
-        output_dir: str,
-        cls_eval_steps: int,
-        summ_eval_steps: int,
-        save_steps: int
+    tasks: dict[str, TrainableTask],
+    num_epochs: int,
+    tokenizer: PreTrainedTokenizer,
+    output_dir: str,
+    cls_eval_steps: int,
+    summ_eval_steps: int,
+    save_steps: int,
 ):
     classification_task = tasks["classification"]
     summarization_task = tasks["summarization"]
 
-    data_ratio = len(summarization_task.train_dataloader) // len(classification_task.train_dataloader) + 1
-    if len(summarization_task.train_dataloader) != len(classification_task.train_dataloader):
+    data_ratio = (
+        len(summarization_task.train_dataloader)
+        // len(classification_task.train_dataloader)
+        + 1
+    )
+    if len(summarization_task.train_dataloader) != len(
+        classification_task.train_dataloader
+    ):
         logger.warning("Two tasks contain different amount of training examples.")
-        logger.warning(f"Classification task contains {len(classification_task.train_dataloader)} batches of data.")
-        logger.warning(f"Summarization task contains {len(summarization_task.train_dataloader)} batches of data.")
+        logger.warning(
+            f"Classification task contains {len(classification_task.train_dataloader)} batches of data."
+        )
+        logger.warning(
+            f"Summarization task contains {len(summarization_task.train_dataloader)} batches of data."
+        )
 
         # assume that summ > cls because thats the case with CNN / Docee
-        logger.warning(f"Classification examples will be duplicated {data_ratio} times.")
-        logger.warning(f"Instead of {len(classification_task.train_dataloader)}, classification dataloader will yield "
-                       f"{data_ratio * len(classification_task.train_dataloader)} examples.")
-
+        logger.warning(
+            f"Classification examples will be duplicated {data_ratio} times."
+        )
+        logger.warning(
+            f"Instead of {len(classification_task.train_dataloader)}, classification dataloader will yield "
+            f"{data_ratio * len(classification_task.train_dataloader)} examples."
+        )
 
     global_step = 0
     for epoch in tqdm(range(num_epochs), desc="Epoch", total=num_epochs):
@@ -286,29 +307,34 @@ def train(
         # load training data, step by step
         iters = {
             "summarization": iter(summarization_task.train_dataloader),
-            "classification": chain(*tee(iter(classification_task.train_dataloader)), data_ratio)
+            "classification": chain(
+                *tee(iter(classification_task.train_dataloader)), data_ratio
+            ),
         }
         progress_bars = {
             "summarization": tqdm(
                 range(len(summarization_task.train_dataloader)),
                 desc=f"Summarization progress in epoch {epoch+1}",
-                total=len(summarization_task.train_dataloader)
+                total=len(summarization_task.train_dataloader),
             ),
             "classification": tqdm(
                 range(data_ratio * len(classification_task.train_dataloader)),
                 desc=f"Classification progress in epoch {epoch+1}",
-                total=min(len(summarization_task.train_dataloader), data_ratio * len(classification_task.train_dataloader))
-            )
+                total=min(
+                    len(summarization_task.train_dataloader),
+                    data_ratio * len(classification_task.train_dataloader),
+                ),
+            ),
         }
 
-        set_train(True, tasks)
+        set_train(True, *tasks.values())
         # tu nesto nece bit dobro zbog kopiranja, idk
         num_epoch_steps = len(summarization_task.train_dataloader) * 2
 
         for step in range(num_epoch_steps):
             global_step += 1
 
-            if step % 2 == 0: # train summarization
+            if step % 2 == 0:  # train summarization
                 task = "summarization"
             else:
                 task = "classification"
@@ -328,7 +354,7 @@ def train(
                     global_step=global_step,
                     eval_dataloader=tasks["classification"].eval_dataloader,
                     accelerator=tasks["classification"].accelerator,
-                    model=tasks["classification"].model
+                    model=tasks["classification"].model,
                 )
                 set_train(True, tasks["classification"])
 
@@ -339,7 +365,7 @@ def train(
                     eval_dataloader=tasks["summarization"].eval_dataloader,
                     accelerator=tasks["summarization"].accelerator,
                     model=tasks["summarization"].model,
-                    tokenizer=tokenizer
+                    tokenizer=tokenizer,
                 )
                 set_train(True, tasks["summarization"])
 
@@ -348,9 +374,8 @@ def train(
                     tasks=tasks,
                     output_dir=output_dir,
                     global_step=global_step,
-                    tokenizer=tokenizer
+                    tokenizer=tokenizer,
                 )
-
 
         # deep learning would be so cool to do with monads, no?
 
@@ -370,8 +395,5 @@ def train(
     logger.info(f"Training complete.")
     # save final checkpoint
     save_everything(
-        tasks,
-        output_dir=output_dir,
-        global_step=global_step,
-        tokenizer=tokenizer
+        tasks, output_dir=output_dir, global_step=global_step, tokenizer=tokenizer
     )

@@ -23,7 +23,7 @@ class Argument:
     text: str
 
     @classmethod
-    def from_dict(cls, d: dict[str, int|str]):
+    def from_dict(cls, d: dict[str, int | str]):
         return cls(**d)
 
 
@@ -43,17 +43,21 @@ def inspect_dataset(dataset: Dataset):
                 print(f"Type of element: {type(field[0])}")
                 print(f"First element = {field[0]}")
     else:
-        logging.warning(f"Cannot inspect dataset {dataset} because it has no `fields` attribute.")
+        logging.warning(
+            f"Cannot inspect dataset {dataset} because it has no `fields` attribute."
+        )
 
 
 class Docee(Dataset):
-    def __init__(self,
-                 df: pd.DataFrame,
-                 tokenizer: PreTrainedTokenizer,
-                 label2id: Optional[dict[str, int]] = None,
-                 return_tensors: str = "pt",
-                 *args, **kwargs
-                 ):
+    def __init__(
+        self,
+        df: pd.DataFrame,
+        tokenizer: PreTrainedTokenizer,
+        label2id: Optional[dict[str, int]] = None,
+        return_tensors: str = "pt",
+        *args,
+        **kwargs,
+    ):
         super().__init__()
         self.tokenizer: PreTrainedTokenizer = tokenizer
         self.text: list[str] = df.text.tolist()
@@ -61,11 +65,14 @@ class Docee(Dataset):
 
         # map labels to IDs
         self.label2id: dict[str, int] = label2id or {
-            label: i
-            for i, label in enumerate(sorted(df.event_type.unique().tolist()))}
+            label: i for i, label in enumerate(sorted(df.event_type.unique().tolist()))
+        }
         self.length = len(self.text)
 
-        self.fields = ["text", "labels"]  # shouldn't this be label?  # where is this even used
+        self.fields = [
+            "text",
+            "labels",
+        ]  # shouldn't this be label?  # where is this even used
         self.return_tensors = return_tensors
         # TODO - don't pass tokenizer, simply pass a partially applied encoding function
 
@@ -84,9 +91,7 @@ class Docee(Dataset):
         #   altho, that's not a priority for now, we could just hardcode it here
 
         batch_encoding = self.tokenizer(
-            text=self.text[idx],
-            truncation=True,
-            return_tensors=self.return_tensors
+            text=self.text[idx], truncation=True, return_tensors=self.return_tensors
         )
         # makes no sense to do the tokenization here tbh
         label = self.label2id[self.labels[idx]]
@@ -102,17 +107,19 @@ class Docee(Dataset):
 
 class DoceeWithArguments(Docee):
     def __init__(
-            self,
-            df: pd.DataFrame,
-            tokenizer: PreTrainedTokenizer,
-            label2id: Optional[dict[str, int]] = None,
-            *args, **kwargs
+        self,
+        df: pd.DataFrame,
+        tokenizer: PreTrainedTokenizer,
+        label2id: Optional[dict[str, int]] = None,
+        *args,
+        **kwargs,
     ):
         super().__init__(df, tokenizer, label2id, *args, **kwargs)
 
         # parse arguments
         self.arguments: list[list[Argument]] = list(
-            map(lambda s: list(arguments_from_str(s)), df.arguments.tolist()))
+            map(lambda s: list(arguments_from_str(s)), df.arguments.tolist())
+        )
 
         self.fields = ["text", "labels", "arguments"]
 
@@ -123,10 +130,10 @@ class DoceeWithArguments(Docee):
 
 class DoceeForInference(Dataset):
     def __init__(
-            self, 
-            df: pd.DataFrame,
-            use_title: bool = False,
-            concat: Optional[Callable[[Iterable[str]], str]] = concat_dot_join
+        self,
+        df: pd.DataFrame,
+        use_title: bool = False,
+        concat: Optional[Callable[[Iterable[str]], str]] = concat_dot_join,
     ):
         columns = ["title", "text"] if use_title else ["text"]
         self.concat = concat
@@ -143,7 +150,7 @@ def preprocess_docee(examples, tokenizer, model_max_length=512):
     batch_encoding = tokenizer(
         examples["text"],
         truncation=True,
-        max_length=tokenizer.model_max_length or model_max_length
+        max_length=tokenizer.model_max_length or model_max_length,
     )
     batch_encoding["labels"] = examples["event_type"]
     return batch_encoding
@@ -152,15 +159,15 @@ def preprocess_docee(examples, tokenizer, model_max_length=512):
 def preprocess_cnn(examples, tokenizer, max_input_length=512, max_target_length=100):
     batch_encoding = tokenizer(
         examples["article"],
-        max_length=tokenizer.model_max_length or max_input_length,
-        truncation=True
+        max_length=tokenizer.model_max_length
+        if tokenizer.model_max_length is not None
+        else max_input_length,
+        truncation=True,
     )
 
     # tokenize the labels
     tokenized_highlights = tokenizer(
-        examples["highlights"],
-        max_length=max_target_length,
-        truncation=True
+        examples["highlights"], max_length=max_target_length, truncation=True
     )
 
     batch_encoding["labels"] = tokenized_highlights["input_ids"]
@@ -168,30 +175,34 @@ def preprocess_cnn(examples, tokenizer, max_input_length=512, max_target_length=
 
 
 def setup_dataset_split(
-        dataset: Dataset,
-        split: str,
-        preprocessing: Callable[[dict], dict],
-        n_examples: Optional[int] = None
+    dataset: Dataset,
+    split: str,
+    preprocessing: Callable[[dict], dict],
+    n_examples: Optional[int] = None,
 ):
+    columns_to_remove = dataset["train"].column_names
+    logger.warning(
+        f"Train dataset contains the following columns: {pformat(columns_to_remove)}."
+        f"Columns will be removed after preprocessing."
+    )
     if n_examples:
-        logger.warning(f"Dataset contains {len(dataset)} examples, but only {n_examples} will be kept.")
+        logger.warning(
+            f"Dataset contains {len(dataset)} examples, but only {n_examples} will be kept."
+        )
         dataset = dataset[split].shuffle().select(range(n_examples))
-    return dataset\
-        .map(preprocessing, batched=True, remove_columns=dataset["train"].column_names)\
-        .with_format("torch")
+    return dataset.map(
+        preprocessing, batched=True, remove_columns=columns_to_remove
+    ).with_format("torch")
 
 
 def setup_cnn(
-        tokenizer: PreTrainedTokenizer,
-        train_size: Optional[int], eval_size: Optional[int]):
-    dataset = load_dataset("cnn_dailymail", "3.0.0", splits=["train", "validation"])
+    tokenizer: PreTrainedTokenizer, train_size: Optional[int], eval_size: Optional[int]
+):
+    dataset = load_dataset("cnn_dailymail", "3.0.0")
     setup_cnn_split = partial(
         setup_dataset_split,
         dataset=dataset,
-        preprocessing=partial(
-            preprocess_cnn,
-            tokenizer=tokenizer
-        )
+        preprocessing=partial(preprocess_cnn, tokenizer=tokenizer),
     )
     cnn_train = setup_cnn_split(split="train", n_examples=train_size)
     cnn_eval = setup_cnn_split(split="validation", n_examples=eval_size)
@@ -200,26 +211,26 @@ def setup_cnn(
 
 
 def setup_docee(
-        train_path: str, eval_path: str,
-        tokenizer: PreTrainedTokenizer,
-        train_size: Optional[int] = None, eval_size: Optional[int] = None):
-    dataset = load_dataset("csv", data_files={
-        "train": train_path,
-        "validation": eval_path
-    })
-    event_names = dataset["train"].unique("event_type")
+    train_path: str,
+    eval_path: str,
+    tokenizer: PreTrainedTokenizer,
+    train_size: Optional[int] = None,
+    eval_size: Optional[int] = None,
+):
+    dataset = load_dataset(
+        "csv", data_files={"train": train_path, "validation": eval_path}
+    )
+    event_names = sorted(dataset["train"].unique("event_type"))
+    label2id = {event_name: i for i, event_name in enumerate(event_names)}
+    logger.info(f"Docee class labels: {pformat(label2id)}")
     dataset = dataset.cast_column(
-        "event_type",
-        ClassLabel(num_classes=len(event_names))
+        "event_type", ClassLabel(num_classes=len(event_names), names=event_names)
     )
 
     setup_docee_split = partial(
         setup_dataset_split,
         dataset=dataset,
-        preprocessing=partial(
-            preprocess_docee,
-            tokenizer=tokenizer
-        )
+        preprocessing=partial(preprocess_docee, tokenizer=tokenizer),
     )
     docee_train = setup_docee_split(split="train", n_examples=train_size)
     docee_eval = setup_docee_split(split="validation", n_examples=eval_size)
