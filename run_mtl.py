@@ -1,10 +1,11 @@
 import argparse
 import logging
 
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, DataCollatorWithPadding, DataCollatorForSeq2Seq
+from transformers.utils import PaddingStrategy
 
 from src.data import setup_cnn, setup_docee
-from src.multi_task_learning import setup_models
+from src.multi_task_learning import setup_models, prepare_task, train
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,90 @@ def get_parser():
         required=False,
         help="If provided, only that much classification examples will be used for evaluation."
     )
+    parser.add_argument(
+        "--cls_learning_rate",
+        type=float,
+        default=2e-5,
+        help="Learning rate used for classification. Defaults to 2e-5."
+    )
+    parser.add_argument(
+        "--summ_learning_rate",
+        type=float,
+        default=1e-5,
+        help="Learning rate used for summarization. Defaults to 1e-5."
+    )
+    parser.add_argument(
+        "--cls_batch_size_train",
+        type=int,
+        default=1,
+        help="Batch size to use for classification training. Defaults to 1."
+    )
+    parser.add_argument(
+        "--cls_batch_size_eval",
+        type=int,
+        default=1,
+        help="Batch size to use for classification evaluation. Defaults to 1."
+    )
+    parser.add_argument(
+        "--cls_grad_acc_steps",
+        type=int,
+        default=1,
+        help="Gradient accumulation steps to use for classification. Defaults to 1."
+    )
+    parser.add_argument(
+        "--summ_batch_size_train",
+        type=int,
+        default=1,
+        help="Batch size to use for summarization training. Defaults to 1."
+    )
+    parser.add_argument(
+        "--summ_batch_size_eval",
+        type=int,
+        default=1,
+        help="Batch size to use for summarization evaluation. Defaults to 1."
+    )
+    parser.add_argument(
+        "--summ_grad_acc_steps",
+        type=int,
+        default=1,
+        help="Gradient accumulation steps to use for summarization. Defaults to 1."
+    )
+    parser.add_argument(
+        "--num_epochs",
+        type=int,
+        default=2,
+        help="Number of epochs to train for. Defaults to 2."
+    )
+    parser.add_argument(
+        "--cls_eval_steps",
+        type=int,
+        default=100,
+        help="Frequency at which the classification performance will be evaluated."
+             "Defaults to 100."
+    )
+    parser.add_argument(
+        "--summ_eval_steps",
+        type=int,
+        default=100,
+        help="Frequency at which the summarization performance will be evaluated."
+             "Defaults to 100."
+    )
+    parser.add_argument(
+        "--save_steps",
+        type=int,
+        default=100,
+        help="Frequency at which the models will be saved. Defaults to 100."
+    )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default="./outputs",
+        help="Output directory. Defaults to `./outputs`"
+    )
+
     return parser
+
+# wandb is not a priority, we must get this thing to work
 
 
 def main():
@@ -105,6 +189,62 @@ def main():
     logger.info(f"Models successfully created.")
 
     # create trainable tasks
+    logger.info(f"Setting up the classification task...")
+    cls_collator = DataCollatorWithPadding(
+        tokenizer=tokenizer,
+        padding=PaddingStrategy.MAX_LENGTH,
+        return_tensors="pt"
+    )
+
+    classification_task = prepare_task(
+        name="classification" ,
+        model=models["classification"],
+        train_dataset=docee_train,
+        eval_dataset=docee_eval,
+        learning_rate=args.cls_learning_rate,
+        per_device_train_batch_size=args.cls_batch_size_train,
+        per_device_eval_batch_size=args.cls_batch_size_eval,
+        gradient_accumulation_steps=args.cls_grad_acc_steps,
+        collate_fn=cls_collator
+    )
+    logger.info(f"Classification task successfully set up.")
+
+    logger.info(f"Setting up the summarization task...")
+    summ_collator = DataCollatorForSeq2Seq(
+        tokenizer=tokenizer,
+        padding=PaddingStrategy.MAX_LENGTH,
+        return_tensors="pt"
+    )
+    summarization_task = prepare_task(
+        name="summarization",
+        model=models["summarization"],
+        train_dataset=cnn_train,
+        eval_dataset=cnn_eval,
+        learning_rate=args.summ_learning_rate,
+        per_device_train_batch_size=args.summ_batch_size_train,
+        per_device_eval_batch_size=args.summ_batch_size_eval,
+        gradient_accumulation_steps=args.summ_grad_acc_steps,
+        collate_fn=summ_collator
+    )
+    logger.info(f"Summarization task successfully set up.")
+
+    tasks = {
+        "classification": classification_task,
+        "summarization": summarization_task
+    }
+
+    train(
+        tasks=tasks,
+        num_epochs=args.num_epochs,
+        tokenizer=tokenizer,
+        output_dir=args.output_dir,
+        cls_eval_steps=args.cls_eval_steps,
+        summ_eval_steps=args.summ_eval_steps,
+        save_steps=args.save_steps
+    )
+
+    logger.info(f"Experiment completed successfully.")
+
 
 
 if __name__ == '__main__':

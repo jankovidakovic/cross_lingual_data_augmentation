@@ -3,7 +3,7 @@ import os
 from dataclasses import dataclass, field
 from itertools import chain, tee
 from pprint import pformat
-from typing import Sequence, Iterable, Any
+from typing import Any
 
 import evaluate
 import numpy as np
