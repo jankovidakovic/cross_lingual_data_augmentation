@@ -323,9 +323,7 @@ def train(
         # load training data, step by step
         iters = {
             "summarization": iter(summarization_task.train_dataloader),
-            "classification": chain(
-                *tee(iter(classification_task.train_dataloader)), data_ratio
-            ),
+            "classification": iter(classification_task.train_dataloader)
         }
         progress_bars = {
             "summarization": tqdm(
@@ -354,7 +352,16 @@ def train(
                 task = "summarization"
             else:
                 task = "classification"
-            batch = next(iters[task])
+
+            try:
+                batch = next(iters[task])
+            except StopIteration:
+                if task == "classification":
+                    # reset the dataloader
+                    iters[task] = iter(tasks[task].train_dataloader)
+                    batch = next(iters[task])
+                else:
+                    break
             with tasks[task].accelerator.accumulate(tasks[task].model):
                 outputs = tasks[task].model(**batch)
                 loss = outputs.loss
