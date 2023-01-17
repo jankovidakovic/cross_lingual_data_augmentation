@@ -180,16 +180,18 @@ def setup_dataset_split(
     preprocessing: Callable[[dict], dict],
     n_examples: Optional[int] = None,
 ):
+    logger.info(f"Creating the {split} split...")
     columns_to_remove = dataset["train"].column_names
     logger.warning(
         f"Train dataset contains the following columns: {pformat(columns_to_remove)}."
         f"Columns will be removed after preprocessing."
     )
+    dataset = dataset[split]
     if n_examples:
         logger.warning(
             f"Dataset contains {len(dataset)} examples, but only {n_examples} will be kept."
         )
-        dataset = dataset[split].shuffle().select(range(n_examples))
+        dataset = dataset.shuffle().select(range(n_examples))
     return dataset.map(
         preprocessing, batched=True, remove_columns=columns_to_remove
     ).with_format("torch")
