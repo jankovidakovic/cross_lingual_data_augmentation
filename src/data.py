@@ -146,17 +146,17 @@ class DoceeForInference(Dataset):
         return self.concat(self.df.iloc[item])
 
 
-def preprocess_docee(examples, tokenizer, model_max_length=512):
+def preprocess_docee(examples, tokenizer, max_input_length=512):
     batch_encoding = tokenizer(
         examples["text"],
         truncation=True,
-        max_length=model_max_length
+        max_length=max_input_length
     )
     batch_encoding["labels"] = examples["event_type"]
     return batch_encoding
 
 
-def preprocess_cnn(examples, tokenizer, max_input_length=512, max_target_length=100):
+def preprocess_cnn(examples, tokenizer, max_input_length=512, max_gen_length=100):
     batch_encoding = tokenizer(
         examples["article"],
         max_length=max_input_length,
@@ -165,7 +165,9 @@ def preprocess_cnn(examples, tokenizer, max_input_length=512, max_target_length=
 
     # tokenize the labels
     tokenized_highlights = tokenizer(
-        examples["highlights"], max_length=max_target_length, truncation=True
+        examples["highlights"],
+        max_length=max_gen_length,
+        truncation=True
     )
 
     batch_encoding["labels"] = tokenized_highlights["input_ids"]
@@ -194,13 +196,20 @@ def setup_dataset_split(
 
 
 def setup_cnn(
-    tokenizer: PreTrainedTokenizer, train_size: Optional[int], eval_size: Optional[int]
+    tokenizer: PreTrainedTokenizer, train_size: Optional[int], eval_size: Optional[int],
+    max_input_length: int,
+    max_gen_length: int
 ):
     dataset = load_dataset("cnn_dailymail", "3.0.0")
     setup_cnn_split = partial(
         setup_dataset_split,
         dataset=dataset,
-        preprocessing=partial(preprocess_cnn, tokenizer=tokenizer),
+        preprocessing=partial(
+            preprocess_cnn,
+            tokenizer=tokenizer,
+            max_input_length=max_input_length,
+            max_gen_length=max_gen_length
+        ),
     )
     cnn_train = setup_cnn_split(split="train", n_examples=train_size)
     cnn_eval = setup_cnn_split(split="validation", n_examples=eval_size)
@@ -212,6 +221,7 @@ def setup_docee(
     train_path: str,
     eval_path: str,
     tokenizer: PreTrainedTokenizer,
+    max_input_length: int,
     train_size: Optional[int] = None,
     eval_size: Optional[int] = None,
 ):
@@ -228,40 +238,13 @@ def setup_docee(
     setup_docee_split = partial(
         setup_dataset_split,
         dataset=dataset,
-        preprocessing=partial(preprocess_docee, tokenizer=tokenizer),
+        preprocessing=partial(preprocess_docee, tokenizer=tokenizer, max_input_length=max_input_length),
     )
     docee_train = setup_docee_split(split="train", n_examples=train_size)
     docee_eval = setup_docee_split(split="validation", n_examples=eval_size)
 
     return docee_train, docee_eval
 
-
-def setup_dummy_dataset(cls_train_size, cls_eval_size, summ_train_size, summ_eval_size, tokenizer):
-    summ = load_dataset("cnn_dailymail", "3.0.0")
-    cls = load_dataset("csv", data_files={
-        "train": "./data/docee/18091999/train.csv",
-        "validation": "./data/docee/18091999/early_stopping.csv"
-    })
-    event_names = cls["train"].unique("event_type")
-    cls = cls.cast_column("event_type", ClassLabel(num_classes=len(event_names), names=sorted(event_names)))
-
-    def setup_dataset_split(dataset, split, n_examples, preprocessing):
-        return dataset[split].shuffle().select(range(n_examples)).map(preprocessing, batched=True, remove_columns=dataset["train"].column_names)
-
-    setup_cls = partial(setup_dataset_split, dataset=cls, preprocessing=partial(preprocess_docee, tokenizer=tokenizer))
-    setup_summ = partial(setup_dataset_split, dataset=summ, preprocessing=partial(preprocess_cnn, tokenizer=tokenizer))
-
-    cls_train = setup_cls(split="train", n_examples=cls_train_size)
-    cls_eval = setup_cls(split="validation", n_examples=cls_eval_size)
-    summ_train = setup_summ(split="train", n_examples=summ_train_size)
-    summ_eval = setup_summ(split="validation", n_examples=summ_eval_size)
-
-    print(f"{len(cls_train) = }")
-    print(f"{len(cls_eval) = }")
-    print(f"{len(summ_train) = }")
-    print(f"{len(summ_eval) = }")
-
-    return cls_train, cls_eval, summ_train, summ_eval
 
 # TODO:
 #   run_multitask_learning.py

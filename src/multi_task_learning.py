@@ -95,8 +95,7 @@ def setup_models(pretrained_model_name_or_path: str):
     logger.info(pformat(classification_model))
 
     summarization_model = BartForConditionalGeneration.from_pretrained(
-        pretrained_model_name_or_path,
-        # num_labels=50265  # BART vocab size
+        pretrained_model_name_or_path
     )
     logger.info(f"===== Summarization model =====")
     logger.info(pformat(summarization_model))
@@ -106,7 +105,6 @@ def setup_models(pretrained_model_name_or_path: str):
         f"Models will share weights of the following layers: 'shared', 'encoder' and 'decoder'"
     )
     summarization_model.model.shared = classification_model.model.shared
-    # .shared are not shared because embeddings have different dimensions (depending on vocab size?)
     summarization_model.model.encoder = classification_model.model.encoder
     summarization_model.model.decoder = classification_model.model.decoder
 
@@ -139,6 +137,7 @@ def evaluate_summarization(
     accelerator: Accelerator,
     model: nn.Module,
     tokenizer: PreTrainedTokenizer,
+    max_gen_length: int
 ):
     rouge_score = evaluate.load("rouge")
 
@@ -152,6 +151,7 @@ def evaluate_summarization(
             generated_tokens = accelerator.unwrap_model(model).generate(
                 batch["input_ids"],
                 attention_mask=batch["attention_mask"],
+                max_length=max_gen_length
             )  # aha! we can plug the generation parameters here
 
             # pad to max length
@@ -220,7 +220,7 @@ def evaluate_classification(
         predictions = torch.argmax(outputs["logits"], dim=1)
         predictions = accelerator.gather(predictions).cpu().numpy()
 
-        for metric in metric.values():
+        for metric in metrics.values():
             metric.add_batch(
                 predictions=predictions,
                 references=batch["labels"].cpu().numpy(),
@@ -275,41 +275,71 @@ def train(
     cls_eval_steps: int,
     summ_eval_steps: int,
     save_steps: int,
+    max_gen_length: int,
 ):
 
-    rouge_score = evaluate.load("rouge")
-    classification_f1 = evaluate.load("f1")
-    # fuck oyu
+    classification_task = tasks["classification"]
+    summarization_task = tasks["summarization"]
 
+    data_ratio = (
+        len(summarization_task.train_dataloader)
+        // len(classification_task.train_dataloader)
+        + 1
+    )
+    if len(summarization_task.train_dataloader) != len(
+        classification_task.train_dataloader
+    ):
+        logger.warning("Two tasks contain different amount of training examples.")
+        logger.warning(
+            f"Classification task contains {len(classification_task.train_dataloader)} batches of data."
+        )
+        logger.warning(
+            f"Summarization task contains {len(summarization_task.train_dataloader)} batches of data."
+        )
+
+        # assume that summ > cls because thats the case with CNN / Docee
+        logger.warning(
+            f"Classification examples will be duplicated {data_ratio} times."
+        )
+        logger.warning(
+            f"Instead of {len(classification_task.train_dataloader)}, classification dataloader will yield "
+            f"{data_ratio * len(classification_task.train_dataloader)} examples."
+        )
+
+    global_step = 0
     for epoch in tqdm(range(num_epochs), desc="Epoch", total=num_epochs):
 
-        summ_cls_ratio = len(tasks["summarization"].train_dataloader) // len(tasks["classification"].train_dataloader) + 1
-        print(f"{summ_cls_ratio = }")
-
-        print(f"Dataloader for classification will be replicated {summ_cls_ratio} times.")
-        cls_tdl_len = len(tasks["classification"].train_dataloader)
-        print(f"Instead of {cls_tdl_len}, classification dataset iterator will yield {cls_tdl_len * summ_cls_ratio} examples.")
-
         # load training data, step by step
-        num_epoch_steps = len(tasks["summarization"].train_dataloader) * 2
-        iters = {task: iter(tasks[task].train_dataloader) for task in tasks}
-        iters["classification"] = chain(*tee(iter(tasks["classification"].train_dataloader), summ_cls_ratio))
-
-        train_lens = {
-            "classification": cls_tdl_len * summ_cls_ratio,
-            "summarization": len(tasks["summarization"].train_dataloader)
+        iters = {
+            "summarization": iter(summarization_task.train_dataloader),
+            "classification": chain(
+                *tee(iter(classification_task.train_dataloader)), data_ratio
+            ),
         }
-        # tasks["classification"]["train_len"] = cls_tdl_len * summ_cls_ratio
-        # tasks["summarization"]["train_len"] = len(tasks["summarization"].train_dataloader)
-
         progress_bars = {
-            task: tqdm(range(train_lens[task]), desc=f"{task} progress in epoch {epoch+1}", total=train_lens[task], leave=False)
-            for task in tasks
+            "summarization": tqdm(
+                range(len(summarization_task.train_dataloader)),
+                desc=f"Summarization progress in epoch {epoch+1}",
+                total=len(summarization_task.train_dataloader),
+            ),
+            "classification": tqdm(
+                range(data_ratio * len(classification_task.train_dataloader)),
+                desc=f"Classification progress in epoch {epoch+1}",
+                total=min(
+                    len(summarization_task.train_dataloader),
+                    data_ratio * len(classification_task.train_dataloader),
+                ),
+            ),
         }
 
-        set_train(True, *tasks.values())  # TODO - changed
+        set_train(True, *tasks.values())
+        # tu nesto nece bit dobro zbog kopiranja, idk
+        num_epoch_steps = len(summarization_task.train_dataloader) * 2
+
         for step in range(num_epoch_steps):
-            if step % 2 == 0: # train summarization
+            global_step += 1
+
+            if step % 2 == 0:  # train summarization
                 task = "summarization"
             else:
                 task = "classification"
@@ -323,127 +353,54 @@ def train(
                 tasks[task].optimizer.zero_grad()
                 progress_bars[task].update(1)
 
-    # classification_task = tasks["classification"]
-    # summarization_task = tasks["summarization"]
-    #
-    # data_ratio = (
-    #     len(summarization_task.train_dataloader)
-    #     // len(classification_task.train_dataloader)
-    #     + 1
-    # )
-    # if len(summarization_task.train_dataloader) != len(
-    #     classification_task.train_dataloader
-    # ):
-    #     logger.warning("Two tasks contain different amount of training examples.")
-    #     logger.warning(
-    #         f"Classification task contains {len(classification_task.train_dataloader)} batches of data."
-    #     )
-    #     logger.warning(
-    #         f"Summarization task contains {len(summarization_task.train_dataloader)} batches of data."
-    #     )
-    #
-    #     # assume that summ > cls because thats the case with CNN / Docee
-    #     logger.warning(
-    #         f"Classification examples will be duplicated {data_ratio} times."
-    #     )
-    #     logger.warning(
-    #         f"Instead of {len(classification_task.train_dataloader)}, classification dataloader will yield "
-    #         f"{data_ratio * len(classification_task.train_dataloader)} examples."
-    #     )
-    #
-    # global_step = 0
-    # for epoch in tqdm(range(num_epochs), desc="Epoch", total=num_epochs):
-    #
-    #     # load training data, step by step
-    #     iters = {
-    #         "summarization": iter(summarization_task.train_dataloader),
-    #         "classification": chain(
-    #             *tee(iter(classification_task.train_dataloader)), data_ratio
-    #         ),
-    #     }
-    #     progress_bars = {
-    #         "summarization": tqdm(
-    #             range(len(summarization_task.train_dataloader)),
-    #             desc=f"Summarization progress in epoch {epoch+1}",
-    #             total=len(summarization_task.train_dataloader),
-    #         ),
-    #         "classification": tqdm(
-    #             range(data_ratio * len(classification_task.train_dataloader)),
-    #             desc=f"Classification progress in epoch {epoch+1}",
-    #             total=min(
-    #                 len(summarization_task.train_dataloader),
-    #                 data_ratio * len(classification_task.train_dataloader),
-    #             ),
-    #         ),
-    #     }
-    #
-    #     set_train(True, *tasks.values())
-    #     # tu nesto nece bit dobro zbog kopiranja, idk
-    #     num_epoch_steps = len(summarization_task.train_dataloader) * 2
-    #
-    #     for step in range(num_epoch_steps):
-    #         global_step += 1
-    #
-    #         if step % 2 == 0:  # train summarization
-    #             task = "summarization"
-    #         else:
-    #             task = "classification"
-    #         batch = next(iters[task])
-    #         with tasks[task].accelerator.accumulate(tasks[task].model):
-    #             outputs = tasks[task].model(**batch)
-    #             loss = outputs.loss
-    #             tasks[task].accelerator.backward(loss)
-    #             tasks[task].optimizer.step()
-    #             # tasks[task].lr_scheduler.step()
-    #             tasks[task].optimizer.zero_grad()
-    #             progress_bars[task].update(1)
-    #
-    #         if global_step % cls_eval_steps == 0:
-    #             set_train(False, tasks["classification"])
-    #             evaluate_classification(
-    #                 global_step=global_step,
-    #                 eval_dataloader=tasks["classification"].eval_dataloader,
-    #                 accelerator=tasks["classification"].accelerator,
-    #                 model=tasks["classification"].model,
-    #             )
-    #             set_train(True, tasks["classification"])
-    #
-    #         if global_step % summ_eval_steps == 0:
-    #             set_train(False, tasks["summarization"])
-    #             evaluate_summarization(
-    #                 global_step=global_step,
-    #                 eval_dataloader=tasks["summarization"].eval_dataloader,
-    #                 accelerator=tasks["summarization"].accelerator,
-    #                 model=tasks["summarization"].model,
-    #                 tokenizer=tokenizer,
-    #             )
-    #             set_train(True, tasks["summarization"])
-    #
-    #         if global_step % save_steps == 0:
-    #             save_everything(
-    #                 tasks=tasks,
-    #                 output_dir=output_dir,
-    #                 global_step=global_step,
-    #                 tokenizer=tokenizer,
-    #             )
-    #
-    #     # deep learning would be so cool to do with monads, no?
-    #
-    #     # TODO - loss weighing
-    #
-    #     # idea -> instead of alternating batches, we could scale losses
-    #     # idea2 -> GAN setup?
-    #     #   -> generator tries to generate summaries
-    #     #   -> discriminator predicts event types base on those summaries
-    #     #   -> generator wants to generate such that discriminator is able to predict labels easier
-    #     #
-    #     # this would also be expensive AS FUCK to train
-    #     #
-    #     # would this work, and why not?
-    #     #   where are the real/fake examples?
-    #
-    # logger.info(f"Training complete.")
-    # # save final checkpoint
-    # save_everything(
-    #     tasks, output_dir=output_dir, global_step=global_step, tokenizer=tokenizer
-    # )
+            if global_step % (cls_eval_steps * 2) == 0:
+                set_train(False, tasks["classification"])
+                evaluate_classification(
+                    global_step=global_step,
+                    eval_dataloader=tasks["classification"].eval_dataloader,
+                    accelerator=tasks["classification"].accelerator,
+                    model=tasks["classification"].model,
+                )
+                set_train(True, tasks["classification"])
+
+            if global_step % (summ_eval_steps * 2) == 0:
+                set_train(False, tasks["summarization"])
+                evaluate_summarization(
+                    global_step=global_step,
+                    eval_dataloader=tasks["summarization"].eval_dataloader,
+                    accelerator=tasks["summarization"].accelerator,
+                    model=tasks["summarization"].model,
+                    tokenizer=tokenizer,
+                    max_gen_length=max_gen_length
+                )
+                set_train(True, tasks["summarization"])
+
+            if global_step % (save_steps * 2) == 0:
+                # * 2 because global step counts both tasks
+                save_everything(
+                    tasks=tasks,
+                    output_dir=output_dir,
+                    global_step=global_step,
+                    tokenizer=tokenizer,
+                )
+
+        # deep learning would be so cool to do with monads, no?
+
+        # TODO - loss weighing
+
+        # idea -> instead of alternating batches, we could scale losses
+        # idea2 -> GAN setup?
+        #   -> generator tries to generate summaries
+        #   -> discriminator predicts event types base on those summaries
+        #   -> generator wants to generate such that discriminator is able to predict labels easier
+        #
+        # this would also be expensive AS FUCK to train
+        #
+        # would this work, and why not?
+        #   where are the real/fake examples?
+
+    logger.info(f"Training complete.")
+    # save final checkpoint
+    save_everything(
+        tasks, output_dir=output_dir, global_step=global_step, tokenizer=tokenizer
+    )

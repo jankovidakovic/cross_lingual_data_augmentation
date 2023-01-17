@@ -5,7 +5,7 @@ import sys
 from transformers import AutoTokenizer, DataCollatorWithPadding, DataCollatorForSeq2Seq
 from transformers.utils import PaddingStrategy
 
-from src.data import setup_cnn, setup_docee, setup_dummy_dataset
+from src.data import setup_cnn, setup_docee
 from src.multi_task_learning import setup_models, prepare_task, train
 
 logger = logging.getLogger(__name__)
@@ -146,6 +146,19 @@ def get_parser():
         default=None,
         help="If provided, logger output will be saved to a file at the given filesystem path",
     )
+    parser.add_argument(
+        "--max_input_length",
+        type=int,
+        default=512,
+        help="Since BART has unlimited input length, it is recommended to set the limit manually. Defaults to 512."
+    )
+    parser.add_argument(
+        "--max_gen_length",
+        type=int,
+        default=100,
+        help="Maximum length of summary. Golden summaries are truncated during tokenization. "
+             "Generated summaries are limited during generation. Defaults to 100."
+    )
 
     return parser
 
@@ -172,8 +185,7 @@ def main():
     # set up the tokenizer and the model
     logger.info(f"Creating the tokenizer...")
     tokenizer = AutoTokenizer.from_pretrained(
-        pretrained_model_name_or_path=args.pretrained_model_name_or_path,
-        # use_fast=False
+        pretrained_model_name_or_path=args.pretrained_model_name_or_path
     )
     logger.info(f"Tokenizer successfully created: {args.pretrained_model_name_or_path}")
 
@@ -189,27 +201,23 @@ def main():
 
     # setup datasets
     logger.info(f"Setting up summarization dataset [CNN]...")
-    # cnn_train, cnn_eval = setup_cnn(
-    #     tokenizer=tokenizer,
-    #     train_size=args.summ_train_size,
-    #     eval_size=args.summ_eval_size,
-    # )
+    cnn_train, cnn_eval = setup_cnn(
+        tokenizer=tokenizer,
+        train_size=args.summ_train_size,
+        eval_size=args.summ_eval_size,
+        max_input_length=args.max_input_length,
+        max_gen_length=args.max_gen_length
+    )
     logger.info(f"CNN/DailyMail dataset successfully set up.")
 
     logger.info(f"Setting up classification dataset [Docee]...")
-    # docee_train, docee_eval = setup_docee(
-    #     tokenizer=tokenizer,
-    #     train_path=args.docee_train_path,
-    #     eval_path=args.docee_eval_path,
-    #     train_size=args.cls_train_size,
-    #     eval_size=args.cls_eval_size,
-    # )
-    docee_train, docee_eval, cnn_train, cnn_eval = setup_dummy_dataset(
-        cls_train_size=args.cls_train_size,
-        cls_eval_size=args.cls_eval_size,
-        summ_train_size=args.summ_train_size,
-        summ_eval_size=args.summ_eval_size,
-        tokenizer=tokenizer
+    docee_train, docee_eval = setup_docee(
+        tokenizer=tokenizer,
+        train_path=args.docee_train_path,
+        eval_path=args.docee_eval_path,
+        train_size=args.cls_train_size,
+        eval_size=args.cls_eval_size,
+        max_input_length=args.max_input_length
     )
     logger.info(f"Successfully set up Docee.")
 
@@ -267,6 +275,7 @@ def main():
         cls_eval_steps=args.cls_eval_steps,
         summ_eval_steps=args.summ_eval_steps,
         save_steps=args.save_steps,
+        max_gen_length=args.max_gen_length
     )
 
     logger.info(f"Experiment completed successfully.")
