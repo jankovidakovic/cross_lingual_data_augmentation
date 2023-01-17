@@ -69,6 +69,8 @@ def prepare_task(
     per_device_eval_batch_size: int,
     gradient_accumulation_steps: int,
     collate_fn: DataCollator,
+    train_num_workers: int,
+    eval_num_workers: int
 ) -> TrainableTask:
     accelerator = Accelerator(gradient_accumulation_steps=gradient_accumulation_steps)
     optimizer = AdamW(model.parameters(), lr=learning_rate)
@@ -78,14 +80,14 @@ def prepare_task(
         shuffle=True,
         collate_fn=collate_fn,
         pin_memory=True,
-        num_workers=per_device_train_batch_size * accelerator.num_processes * 2
+        num_workers=train_num_workers,
     )
     eval_dataloader = DataLoader(
         eval_dataset,
         batch_size=per_device_eval_batch_size,
         collate_fn=collate_fn,
         pin_memory=True,
-        num_workers=per_device_eval_batch_size * accelerator.num_processes * 2
+        num_workers=eval_num_workers
     )
     return TrainableTask(
         name=name,

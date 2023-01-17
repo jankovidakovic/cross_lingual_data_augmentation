@@ -171,6 +171,18 @@ def get_parser():
         default=0.06,
         help="Percentage of steps for linear warmup of learning rate scheduler for summarization. Defaults to 0.06"
     )
+    parser.add_argument(
+        "--train_num_workers",
+        type=int,
+        default=16,
+        help="Defaults to 16."
+    )
+    parser.add_argument(
+        "--eval_num_workers",
+        type=int,
+        default=16,
+        help="Defaults to 16."
+    )
 
     return parser
 
@@ -257,6 +269,8 @@ def main():
         per_device_eval_batch_size=args.cls_batch_size_eval,
         gradient_accumulation_steps=args.cls_grad_acc_steps,
         collate_fn=cls_collator,
+        train_num_workers=args.train_num_workers,
+        eval_num_workers=args.eval_num_workers
     )
     logger.info(f"Classification task successfully set up.")
 
@@ -275,7 +289,9 @@ def main():
         per_device_train_batch_size=args.summ_batch_size_train,
         per_device_eval_batch_size=args.summ_batch_size_eval,
         gradient_accumulation_steps=args.summ_grad_acc_steps,
-        collate_fn=summ_collator
+        collate_fn=summ_collator,
+        train_num_workers=args.train_num_workers,
+        eval_num_workers=args.eval_num_workers
     )
     logger.info(f"Summarization task successfully set up.")
 
