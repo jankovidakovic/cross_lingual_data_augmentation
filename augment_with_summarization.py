@@ -155,6 +155,13 @@ def get_parser() -> argparse.ArgumentParser:
         help="Alpha for contrastive search. Defaults to 0 (turned off)"
     )
 
+    parser.add_argument(
+        "--tokenizer_path",
+        type=str,
+        default=None,
+        help="Tokenizer path, if not the same as `pretrained_model_name_or_path`"
+    )
+
 
     return parser
 
@@ -182,8 +189,8 @@ def main():
     # df has "id" column
 
     tokenizer = AutoTokenizer.from_pretrained(
-        args.pretrained_model_name_or_path,
-        padding=PaddingStrategy.MAX_LENGTH,
+        args.tokenizer_path or args.pretrained_model_name_or_path,
+        padding=PaddingStrategy.LONGEST,
         use_fast=True
     )
     summarizer = pipeline(
