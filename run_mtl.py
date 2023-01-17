@@ -2,7 +2,7 @@ import argparse
 import logging
 import sys
 
-from transformers import AutoTokenizer, DataCollatorWithPadding, DataCollatorForSeq2Seq
+from transformers import AutoTokenizer, DataCollatorWithPadding, DataCollatorForSeq2Seq, get_scheduler
 from transformers.utils import PaddingStrategy
 
 from src.data import setup_cnn, setup_docee
@@ -159,6 +159,18 @@ def get_parser():
         help="Maximum length of summary. Golden summaries are truncated during tokenization. "
              "Generated summaries are limited during generation. Defaults to 100."
     )
+    parser.add_argument(
+        "--cls_lr_scheduler_warmup",
+        type=float,
+        default=0.06,
+        help="Percentage of steps for linear warmup of learning rate scheduler for classification. Defaults to 0.06"
+    )
+    parser.add_argument(
+        "--summ_lr_scheduler_warmup",
+        type=float,
+        default=0.06,
+        help="Percentage of steps for linear warmup of learning rate scheduler for summarization. Defaults to 0.06"
+    )
 
     return parser
 
@@ -233,6 +245,8 @@ def main():
         return_tensors="pt"
     )
 
+    # how to calculate number of training steps
+
     classification_task = prepare_task(
         name="classification",
         model=models["classification"],
@@ -261,9 +275,48 @@ def main():
         per_device_train_batch_size=args.summ_batch_size_train,
         per_device_eval_batch_size=args.summ_batch_size_eval,
         gradient_accumulation_steps=args.summ_grad_acc_steps,
-        collate_fn=summ_collator,
+        collate_fn=summ_collator
     )
     logger.info(f"Summarization task successfully set up.")
+
+    # calculate number of training steps, for learning rate schedulers
+    num_epoch_steps = len(summarization_task.train_dataloader)
+    # we assume that summarization will always contain more examples than classification
+    # classification examples will be replicated enough times to match the summarization count
+    # however, because of the paralel iteration, the last few classification batches will be truncated
+
+    cls_training_steps = args.num_epochs * (
+            num_epoch_steps
+            // args.cls_batch_size_train)  # TODO - grad acc?
+    summ_training_steps = args.num_epochs * (
+            num_epoch_steps
+            // args.summ_batch_size_train
+            )  # TODO - grad acc?
+
+    cls_scheduler_warmup_steps = int(round(args.cls_lr_scheduler_warmup * cls_training_steps))
+    summ_scheduler_warmup_steps = int(round(args.summ_lr_scheduler_warmup * summ_training_steps))
+
+    logger.warning(f"Learning rate scheduler parameters have been initialized as follows:")
+    logger.warning(f"{cls_training_steps = }")
+    logger.warning(f"{cls_scheduler_warmup_steps = }")
+    logger.warning(f"{summ_training_steps = }")
+    logger.warning(f"{summ_scheduler_warmup_steps = }")
+
+    classification_task.lr_scheduler = get_scheduler(
+        "linear",
+        classification_task.optimizer,
+        num_warmup_steps=cls_scheduler_warmup_steps,
+        num_training_steps=cls_training_steps
+    )
+
+    summarization_task.lr_scheduler = get_scheduler(
+        "linear",
+        summarization_task.optimizer,
+        num_warmup_steps=summ_scheduler_warmup_steps,
+        num_training_steps=summ_training_steps
+    )
+
+    logger.info(f"Both schedulers have successfully been set up.")
 
     tasks = {"classification": classification_task, "summarization": summarization_task}
 

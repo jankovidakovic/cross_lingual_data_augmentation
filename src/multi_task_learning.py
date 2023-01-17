@@ -18,7 +18,7 @@ from transformers import (
     DataCollator,
     PreTrainedTokenizer,
     BartForSequenceClassification,
-    BartForConditionalGeneration,
+    BartForConditionalGeneration
 )
 
 from src.summarization import postprocess_for_rouge
@@ -35,8 +35,8 @@ class TrainableTask:
     eval_dataloader: DataLoader
     accelerator: Accelerator
     optimizer: Optimizer
-    # TODO - scheduler
-    lr_scheduler: Any = field(init=False)
+    _lr_scheduler: Any = field(init=False)
+
 
     def __post_init__(self):
         # acceleration, babyyy
@@ -48,6 +48,15 @@ class TrainableTask:
         self.eval_dataloader = self.accelerator.prepare_data_loader(
             self.eval_dataloader
         )
+
+    @property
+    def lr_scheduler(self):
+        return self._lr_scheduler
+
+    @lr_scheduler.setter
+    def lr_scheduler(self, value: Any):
+        logger.info(f"Learning scheduler setter triggered.")
+        self._lr_scheduler = self.accelerator.prepare_scheduler(value)
 
 
 def prepare_task(
@@ -349,7 +358,7 @@ def train(
                 loss = outputs.loss
                 tasks[task].accelerator.backward(loss)
                 tasks[task].optimizer.step()
-                # tasks[task].lr_scheduler.step()
+                tasks[task].lr_scheduler.step()
                 tasks[task].optimizer.zero_grad()
                 progress_bars[task].update(1)
 
@@ -362,6 +371,7 @@ def train(
                     model=tasks["classification"].model,
                 )
                 set_train(True, tasks["classification"])
+                logger.info(f"Classification learning rate = {tasks['classification'].lr_scheduler.get_last_lr()}")
 
             if global_step % (summ_eval_steps * 2) == 0:
                 set_train(False, tasks["summarization"])
@@ -374,6 +384,7 @@ def train(
                     max_gen_length=max_gen_length
                 )
                 set_train(True, tasks["summarization"])
+                logger.info(f"Summarization learning rate = {tasks['summarization'].lr_scheduler.get_last_lr()}")
 
             if global_step % (save_steps * 2) == 0:
                 # * 2 because global step counts both tasks
