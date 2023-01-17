@@ -230,11 +230,13 @@ def evaluate_classification(
         # decode logits into labels
         predictions = torch.argmax(outputs["logits"], dim=1)
         predictions = accelerator.gather(predictions).cpu().numpy()
+        labels = batch["labels"]
+        labels = accelerator.gather(labels).cpu().numpy()
 
         for metric in metrics.values():
             metric.add_batch(
                 predictions=predictions,
-                references=batch["labels"].cpu().numpy(),
+                references=labels
             )
 
     logger.info(f"[GLOBAL_STEP={global_step}] ======= Evaluation results =======")
