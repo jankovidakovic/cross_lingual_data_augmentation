@@ -322,6 +322,30 @@ def train(
         )
 
     global_step = 0
+    logger.info(f"Evaluating initial performance [CLASSIFICATION]")
+    set_train(False, tasks["classification"])
+    evaluate_classification(
+        global_step=global_step,
+        eval_dataloader=tasks["classification"].eval_dataloader,
+        accelerator=tasks["classification"].accelerator,
+        model=tasks["classification"].model,
+    )
+    set_train(True, tasks["classification"])
+    logger.info(f"Classification learning rate = {tasks['classification'].lr_scheduler.get_last_lr()}")
+
+    set_train(False, tasks["summarization"])
+    logger.info(f"Evaluating initial performance [SUMMARIZATION]")
+    evaluate_summarization(
+        global_step=global_step,
+        eval_dataloader=tasks["summarization"].eval_dataloader,
+        accelerator=tasks["summarization"].accelerator,
+        model=tasks["summarization"].model,
+        tokenizer=tokenizer,
+        max_gen_length=max_gen_length
+    )
+    set_train(True, tasks["summarization"])
+    logger.info(f"Summarization learning rate = {tasks['summarization'].lr_scheduler.get_last_lr()}")
+
     for epoch in tqdm(range(num_epochs), desc="Epoch", total=num_epochs):
 
         # load training data, step by step
@@ -374,6 +398,14 @@ def train(
                 tasks[task].lr_scheduler.step()
                 tasks[task].optimizer.zero_grad()
                 progress_bars[task].update(1)
+                if tasks[task].lr_scheduler.get_last_lr() == 0.0:
+                    logger.error(f"Learning rate for {task} has fallen to 0.0. Stopping the training.")
+                    # save final checkpoint
+                    save_everything(
+                        tasks, output_dir=output_dir, global_step=global_step, tokenizer=tokenizer
+                    )
+                    logger.info(f"Training complete.")
+                    return
 
             if global_step % (cls_eval_steps * 2) == 0:
                 set_train(False, tasks["classification"])
