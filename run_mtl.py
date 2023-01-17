@@ -5,7 +5,7 @@ import sys
 from transformers import AutoTokenizer, DataCollatorWithPadding, DataCollatorForSeq2Seq
 from transformers.utils import PaddingStrategy
 
-from src.data import setup_cnn, setup_docee
+from src.data import setup_cnn, setup_docee, setup_dummy_dataset
 from src.multi_task_learning import setup_models, prepare_task, train
 
 logger = logging.getLogger(__name__)
@@ -171,34 +171,45 @@ def main():
 
     # set up the tokenizer and the model
     logger.info(f"Creating the tokenizer...")
-    tokenizer = AutoTokenizer.from_pretrained(args.pretrained_model_name_or_path)
+    tokenizer = AutoTokenizer.from_pretrained(
+        pretrained_model_name_or_path=args.pretrained_model_name_or_path,
+        # use_fast=False
+    )
     logger.info(f"Tokenizer successfully created: {args.pretrained_model_name_or_path}")
 
-    if tokenizer.model_max_length > sys.maxsize:
-        logger.warning(
-            f"Tokenizer model max length is too large, consequently unrepresentable in some versions of python."
-            f"Max length will be set to `sys.maxsize`, which on the current system is equal to {sys.maxsize}"
-        )
-        tokenizer.model_max_length = sys.maxsize
-    else:
-        logger.info(f"Tokenizer max length is set to: {tokenizer.model_max_length}")
+    # if tokenizer.model_max_length > sys.maxsize:
+    #     logger.warning(
+    #         f"Tokenizer model max length is too large, consequently unrepresentable in some versions of python."
+    #         f"Max length will be set to `sys.maxsize`, which on the current system is equal to {sys.maxsize}"
+    #     )
+    #     tokenizer.model_max_length = sys.maxsize
+    # else:
+    #     logger.info(f"Tokenizer max length is set to: {tokenizer.model_max_length}")
+    # TODO - commented out because not present in notebook (and notebook works!)
 
     # setup datasets
     logger.info(f"Setting up summarization dataset [CNN]...")
-    cnn_train, cnn_eval = setup_cnn(
-        tokenizer=tokenizer,
-        train_size=args.summ_train_size,
-        eval_size=args.summ_eval_size,
-    )
+    # cnn_train, cnn_eval = setup_cnn(
+    #     tokenizer=tokenizer,
+    #     train_size=args.summ_train_size,
+    #     eval_size=args.summ_eval_size,
+    # )
     logger.info(f"CNN/DailyMail dataset successfully set up.")
 
     logger.info(f"Setting up classification dataset [Docee]...")
-    docee_train, docee_eval = setup_docee(
-        tokenizer=tokenizer,
-        train_path=args.docee_train_path,
-        eval_path=args.docee_eval_path,
-        train_size=args.cls_train_size,
-        eval_size=args.cls_eval_size,
+    # docee_train, docee_eval = setup_docee(
+    #     tokenizer=tokenizer,
+    #     train_path=args.docee_train_path,
+    #     eval_path=args.docee_eval_path,
+    #     train_size=args.cls_train_size,
+    #     eval_size=args.cls_eval_size,
+    # )
+    docee_train, docee_eval, cnn_train, cnn_eval = setup_dummy_dataset(
+        cls_train_size=args.cls_train_size,
+        cls_eval_size=args.cls_eval_size,
+        summ_train_size=args.summ_train_size,
+        summ_eval_size=args.summ_eval_size,
+        tokenizer=tokenizer
     )
     logger.info(f"Successfully set up Docee.")
 
@@ -209,7 +220,9 @@ def main():
     # create trainable tasks
     logger.info(f"Setting up the classification task...")
     cls_collator = DataCollatorWithPadding(
-        tokenizer=tokenizer, padding=PaddingStrategy.LONGEST, return_tensors="pt"
+        tokenizer=tokenizer,
+        padding=PaddingStrategy.LONGEST,
+        return_tensors="pt"
     )
 
     classification_task = prepare_task(
@@ -227,7 +240,9 @@ def main():
 
     logger.info(f"Setting up the summarization task...")
     summ_collator = DataCollatorForSeq2Seq(
-        tokenizer=tokenizer, padding=PaddingStrategy.LONGEST, return_tensors="pt"
+        tokenizer=tokenizer,
+        padding=PaddingStrategy.LONGEST,
+        return_tensors="pt"
     )
     summarization_task = prepare_task(
         name="summarization",
