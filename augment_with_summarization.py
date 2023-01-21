@@ -108,9 +108,8 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--num_beams",
         type=int,
-        default=4,
-        help="Number of beams to use for beam search. Defaults to 4."
-             "Setting this value to 1 means no beam search."
+        default=1,
+        help="Number of beams to use for beam search. Defaults to 1, which means no beam search"
     )
 
     parser.add_argument(
