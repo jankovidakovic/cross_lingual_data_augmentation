@@ -1,4 +1,5 @@
 import logging
+import os
 from dataclasses import dataclass, field
 from pprint import pformat
 from typing import Optional, Sequence, Generator, Callable, Iterable
@@ -8,6 +9,9 @@ from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer
 
 from src.utils import concat_dot_join
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -132,3 +136,30 @@ class DoceeForInference(Dataset):
         return self.concat(self.df.iloc[item])
 
 
+def deduplicate(
+        dataset_path: str,
+        subset: Optional[list[str]]=None,
+        old_index_name: str="id",
+        new_index_name: str="id",
+        write_out=print
+):
+    if subset is None:
+        subset = ["text"]
+
+    write_out(f"Performing deduplication by the following column subset: {subset}")
+
+    df = pd.read_csv(dataset_path)
+    write_out(f"Loaded {len(df)} rows from {os.path.abspath(dataset_path)}")
+
+    duplicates: pd.DataFrame = df.loc[df.duplicated(subset=subset, keep=False), :]
+    write_out(f"With respect to columns {pformat(subset)}, {len(duplicates)} duplicate examples were found.")
+
+    df.drop_duplicates(subset=subset, keep=False, inplace=True)
+
+    write_out(f"After removing duplicates, dataset contains {len(df)} columns.")
+
+    write_out(f"Index with {old_index_name = } will be reset to {new_index_name = }")
+    df.reset_index(drop=False, inplace=True)
+    df.to_csv(dataset_path, index_label=new_index_name)
+
+    write_out(f"Deduplication complete.")
