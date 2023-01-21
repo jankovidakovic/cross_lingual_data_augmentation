@@ -4,6 +4,7 @@ from pprint import pformat
 import os
 
 import pandas as pd
+import yaml
 from tqdm import tqdm
 from transformers import AutoTokenizer, pipeline, set_seed, enable_full_determinism
 from transformers.utils import PaddingStrategy
@@ -363,6 +364,11 @@ def main():
     logging.info(f"Columns: {df_to_save.columns}")
 
     # TODO - save hyperparameter info, or do dataset versioning via W&B
+
+    hyperparam_output_path = f"{args.output_path}.hyperparams.yaml"
+    with open(hyperparam_output_path, "w") as f:
+        yaml.safe_dump(vars(args), f)
+        logger.info(f"Hyperparameters saved to: {os.path.abspath(hyperparam_output_path)}")
 
     df_to_save.to_csv(args.output_path, index_label="id", escapechar="\\")
     logger.info(f"Successfully saved resulting dataset at path  {os.path.abspath(args.output_path)}")
