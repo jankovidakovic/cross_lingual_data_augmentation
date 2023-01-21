@@ -365,6 +365,8 @@ def main():
 
     # TODO - save hyperparameter info, or do dataset versioning via W&B
 
+    os.makedirs(os.path.dirname(args.output_path), exist_ok=True)
+
     hyperparam_output_path = f"{args.output_path}.hyperparams.yaml"
     with open(hyperparam_output_path, "w") as f:
         yaml.safe_dump(vars(args), f)
