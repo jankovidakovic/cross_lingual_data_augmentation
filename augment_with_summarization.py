@@ -143,9 +143,10 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--num_return_sequences",
         type=int,
-        default=1,
+        default=3,
         help="Number of sequences to return for each source document which is summarized. "
-        "Note that this option doesn't make sense unless `do_sample` is also set. Defaults to 1."
+        "Note that this option doesn't make sense unless `do_sample` is also set. "
+             "Defaults to 3."
         )
 
     parser.add_argument(
