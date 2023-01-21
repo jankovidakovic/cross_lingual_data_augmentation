@@ -162,6 +162,15 @@ def get_parser() -> argparse.ArgumentParser:
         help="Tokenizer path, if not the same as `pretrained_model_name_or_path`"
     )
 
+    parser.add_argument(
+        "--model_max_length",
+        type=int,
+        default=1024,
+        help="Maximum length of input sequence that the model will take."
+             "Inputs longer than this value will be truncated."
+             "Defaults to 512."
+    )
+
 
     return parser
 
@@ -191,7 +200,8 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(
         args.tokenizer_path or args.pretrained_model_name_or_path,
         padding=PaddingStrategy.LONGEST,
-        use_fast=True
+        use_fast=True,
+        model_max_length=args.model_max_length
     )
     summarizer = pipeline(
         "summarization",
@@ -332,9 +342,6 @@ def main():
         #   top-p
         #   contrastive_search
         #
-        # TODO - implement generation of multiple sequences at once
-        # TODO - figure out what is the best way to save the generated summaries
-        # TODO - add source document ID for each summary
 
     ]
 
