@@ -1,7 +1,10 @@
 import argparse
 import logging
+import os
 import sys
+from pprint import pformat
 
+import yaml
 from transformers import AutoTokenizer, DataCollatorWithPadding, DataCollatorForSeq2Seq, get_scheduler
 from transformers.utils import PaddingStrategy
 
@@ -220,7 +223,7 @@ def main():
         handlers=logging_handlers,
     )
 
-    logger.info(f"Command line arguments: {args}")
+    logger.info(f"Command line arguments: {pformat(vars(args))}")
 
     # set up the tokenizer and the model
     logger.info(f"Creating the tokenizer...")
@@ -367,6 +370,12 @@ def main():
     )
 
     logger.info(f"Experiment completed successfully.")
+
+    # save hyperparams
+    hyperparams_save_path = os.path.join(args.output_dir, "args.yaml")
+    with open(hyperparams_save_path, "w") as f:
+        yaml.safe_dump(vars(args), f)
+        logger.info(f"Command-line arguments saved to {os.path.abspath(hyperparams_save_path)}")
 
 
 if __name__ == "__main__":
