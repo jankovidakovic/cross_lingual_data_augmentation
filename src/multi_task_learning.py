@@ -249,6 +249,31 @@ def evaluate_classification(
     logger.info("Evaluation complete.")
 
 
+def save_task(
+        task_name: str,
+        task: TrainableTask,
+        output_dir: str,
+        global_step: int,
+        tokenizer: PreTrainedTokenizer
+):
+    save_dir = os.path.join(output_dir, f"checkpoint-{global_step}")
+    model_save_dir = os.path.join(save_dir, task_name)
+    logger.warning(f"Saving {task} model to {os.path.abspath(model_save_dir)}")
+    save_model(
+        model=task.model,
+        accelerator=task.accelerator,
+        output_dir=model_save_dir,
+    )
+    logger.warning(
+        f"{task} model successfully saved to {os.path.abspath(model_save_dir)}"
+    )
+    if task.accelerator.is_main_process:
+        logger.warning(f"Saving tokenizer to {os.path.abspath(save_dir)}")
+        tokenizer.save_pretrained(save_dir)
+        logger.warning(f"Successfully saved tokenizer to {os.path.abspath(save_dir)}")
+
+
+
 def save_everything(
     tasks: dict[str, TrainableTask],
     output_dir: str,
