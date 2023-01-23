@@ -132,7 +132,7 @@ def get_parser():
         "--save_steps",
         type=int,
         default=100,
-        help="Frequency at which the models will be saved. Defaults to 100.",
+        help="Frequency at which the summarization model will be saved. Defaults to 100.",
     )
     parser.add_argument(
         "--output_dir",
@@ -155,9 +155,9 @@ def get_parser():
     parser.add_argument(
         "--max_gen_length",
         type=int,
-        default=100,
+        default=156,
         help="Maximum length of summary. Golden summaries are truncated during tokenization. "
-             "Generated summaries are limited during generation. Defaults to 100."
+             "Generated summaries are limited during generation. Defaults to 156, which is the default value  for CNN."
     )
     parser.add_argument(
         "--cls_lr_scheduler_warmup",
@@ -182,6 +182,22 @@ def get_parser():
         type=int,
         default=16,
         help="Defaults to 16."
+    )
+
+    parser.add_argument(
+        "--cls_lr_scheduler_type",
+        type=str,
+        default="constant_with_warmup",
+        choices=["constant", "constant_with_warmup", "linear"],
+        help="LR scheduler type to use for the classification task. Defaults to 'constant_with_warmup'"
+    )
+
+    parser.add_argument(
+        "--summ_lr_scheduler_type",
+        type=str,
+        default="constant_with_warmup",
+        choices=["constant", "constant_with_warmup", "linear"],
+        help="LR scheduler type to use for the summarization task. Defaults to 'constant_with_warmup'"
     )
 
     return parser
@@ -297,42 +313,45 @@ def main():
 
     # calculate number of training steps, for learning rate schedulers
     num_epoch_steps = len(summarization_task.train_dataloader)
+    # num_epoch_steps already takes into account batch_size
+    # because we are computing the length of the DATALOADEAR
+
     # we assume that summarization will always contain more examples than classification
     # classification examples will be replicated enough times to match the summarization count
     # however, because of the paralel iteration, the last few classification batches will be truncated
 
-    cls_training_steps = args.num_epochs * (
-            num_epoch_steps
-            // args.cls_batch_size_train)  # TODO - grad acc?
-    summ_training_steps = args.num_epochs * (
-            num_epoch_steps
-            // args.summ_batch_size_train
-            )  # TODO - grad acc?
+    cls_training_steps = args.num_epochs * num_epoch_steps // args.cls_grad_acc_steps
+    summ_training_steps = args.num_epochs * num_epoch_steps // args.summ_grad_acc_steps
 
     cls_scheduler_warmup_steps = int(round(args.cls_lr_scheduler_warmup * cls_training_steps))
     summ_scheduler_warmup_steps = int(round(args.summ_lr_scheduler_warmup * summ_training_steps))
 
-    logger.warning(f"Learning rate scheduler parameters have been initialized as follows:")
-    logger.warning(f"{cls_training_steps = }")
-    logger.warning(f"{cls_scheduler_warmup_steps = }")
     logger.warning(f"{summ_training_steps = }")
     logger.warning(f"{summ_scheduler_warmup_steps = }")
 
     classification_task.lr_scheduler = get_scheduler(
-        "linear",
+        args.cls_lr_scheduler_type,
         classification_task.optimizer,
         num_warmup_steps=cls_scheduler_warmup_steps,
         num_training_steps=cls_training_steps
     )
 
+    logger.warning(f"Classification task will use the following scheduler: ")
+    logger.warning(f"{args.cls_lr_scheduler_type = }")
+    logger.warning(f"{cls_training_steps = }")
+    logger.warning(f"{cls_scheduler_warmup_steps = }")
+
     summarization_task.lr_scheduler = get_scheduler(
-        "linear",
+        args.summ_lr_scheduler_type,
         summarization_task.optimizer,
         num_warmup_steps=summ_scheduler_warmup_steps,
         num_training_steps=summ_training_steps
     )
 
-    logger.info(f"Both schedulers have successfully been set up.")
+    logger.warning(f"Summarization task will use the following scheduler: ")
+    logger.warning(f"{args.summ_lr_scheduler_type = }")
+    logger.warning(f"{summ_training_steps = }")
+    logger.warning(f"{summ_scheduler_warmup_steps = }")
 
     tasks = {"classification": classification_task, "summarization": summarization_task}
 
