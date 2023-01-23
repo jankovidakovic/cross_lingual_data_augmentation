@@ -12,11 +12,15 @@ dependencies:
   - conda-forge::matplotlib=3.6.0
   - conda-forge::pandas=1.5.0
   - conda-forge::scikit-learn=1.1.2
-  - huggingface::transformers=4.24
+  - huggingface::transformers=4.25.1
   - jupyter=1.0.0
   - conda-forge::wandb=0.13.3
   - pip=22.3
   - conda-forge::spacy=3.4
+  - huggingface::datasets=2.8.0
+  - conda-forge::accelerate=0.15.0
   - pip:
      - sentencepiece==0.1.97
      - lightning===1.8.1
+     - rouge_score==0.1.2
+     - evaluate==0.4.0

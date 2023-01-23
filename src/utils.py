@@ -1,13 +1,21 @@
+import logging
 import time
 from functools import wraps
+from operator import attrgetter
+from pprint import pformat
 from typing import Tuple, Generator, Any, Callable, Iterable
 
 import numpy as np
 import pandas as pd
+import torch
 from sklearn.metrics import precision_score, recall_score, f1_score
+from torch import nn
 from tqdm import tqdm
 
 from src.types import NewsWikiSplit
+
+
+logger = logging.getLogger(__name__)
 
 
 def count_unique(df: pd.DataFrame, col_name: str) -> int | None:
@@ -159,3 +167,38 @@ def identity(x: Any) -> Any:
 
 def alternating_concat(df: pd.DataFrame, n_duplicates: int):
     return pd.DataFrame([row[1] for row in df.iterrows() for _ in range(n_duplicates)])
+
+
+def compose(*fs):
+    def composition(*args, **kwargs):
+        output = fs[-1](*args, **kwargs)
+        for f in reversed(fs[:-1]):
+            output = f(output)
+        return output
+    return composition
+
+
+def check_shared_weights(
+        first_model: nn.Module,
+        second_model: nn.Module,
+        shared_modules: list[str]
+):
+    for shared_module in shared_modules:
+        logger.info(f"Checking parameters of module {shared_module}...")
+        first_module = attrgetter(shared_module)(first_model)
+        second_module = attrgetter(shared_module)(second_model)
+
+        for (name1, param1), (name2, param2) in zip(
+                first_module.named_parameters(),
+                second_module.named_parameters()
+        ):
+            if not torch.all(torch.eq(param1, param2)):
+                error_msg = f"Parameters with name {name1} and {name2} are not equal!" \
+                            f"Parameters in first model: {pformat(param1)}. " \
+                            f"Parameters in second model: {pformat(param2)}. "
+                logger.error(error_msg)
+                raise RuntimeError(error_msg)
+
+        logger.info(f"Parameters of {shared_module} are equal between the two models.")
+
+    logger.info(f"Parameters are equal in the following modules: {shared_modules}")

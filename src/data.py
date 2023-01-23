@@ -1,11 +1,13 @@
 import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from functools import partial
 from pprint import pformat
 from typing import Optional, Sequence, Generator, Callable, Iterable
 
 import pandas as pd
 import numpy as np
+from datasets import load_dataset, ClassLabel
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer
 from sklearn.model_selection import StratifiedKFold
@@ -96,7 +98,6 @@ class Docee(Dataset):
         )
         label = self.label2id[self.labels[idx]]
         batch_encoding["labels"] = label
-        logging.info(f"Got item: {pformat(batch_encoding)}")
         return batch_encoding
         # return self.text[idx], self.labels[idx]
         # we could probably tokenize this, right?
@@ -143,6 +144,108 @@ class DoceeForInference(Dataset):
 
     def __getitem__(self, item):
         return self.concat(self.df.iloc[item])
+
+
+def preprocess_docee(examples, tokenizer, max_input_length=512):
+    batch_encoding = tokenizer(
+        examples["text"],
+        truncation=True,
+        max_length=max_input_length
+    )
+    batch_encoding["labels"] = examples["event_type"]
+    return batch_encoding
+
+
+def preprocess_cnn(examples, tokenizer, max_input_length=512, max_gen_length=100):
+    batch_encoding = tokenizer(
+        examples["article"],
+        max_length=max_input_length,
+        truncation=True
+    )
+
+    # tokenize the labels
+    tokenized_highlights = tokenizer(
+        examples["highlights"],
+        max_length=max_gen_length,
+        truncation=True
+    )
+
+    batch_encoding["labels"] = tokenized_highlights["input_ids"]
+    return batch_encoding
+
+
+def setup_dataset_split(
+    dataset: Dataset,
+    split: str,
+    preprocessing: Callable[[dict], dict],
+    n_examples: Optional[int] = None,
+):
+    logger.info(f"Creating the {split} split...")
+    columns_to_remove = dataset["train"].column_names
+    logger.warning(
+        f"Train dataset contains the following columns: {pformat(columns_to_remove)}."
+        f"Columns will be removed after preprocessing."
+    )
+    dataset = dataset[split]
+    if n_examples:
+        logger.warning(
+            f"Dataset contains {len(dataset)} examples, but only {n_examples} will be kept."
+        )
+        dataset = dataset.shuffle().select(range(n_examples))
+    return dataset.map(
+        preprocessing, batched=True, remove_columns=columns_to_remove
+    ).with_format("torch")
+
+
+def setup_cnn(
+    tokenizer: PreTrainedTokenizer, train_size: Optional[int], eval_size: Optional[int],
+    max_input_length: int,
+    max_gen_length: int
+):
+    dataset = load_dataset("cnn_dailymail", "3.0.0")
+    setup_cnn_split = partial(
+        setup_dataset_split,
+        dataset=dataset,
+        preprocessing=partial(
+            preprocess_cnn,
+            tokenizer=tokenizer,
+            max_input_length=max_input_length,
+            max_gen_length=max_gen_length
+        ),
+    )
+    cnn_train = setup_cnn_split(split="train", n_examples=train_size)
+    cnn_eval = setup_cnn_split(split="validation", n_examples=eval_size)
+
+    return cnn_train, cnn_eval
+
+
+def setup_docee(
+    train_path: str,
+    eval_path: str,
+    tokenizer: PreTrainedTokenizer,
+    max_input_length: int,
+    train_size: Optional[int] = None,
+    eval_size: Optional[int] = None,
+):
+    dataset = load_dataset(
+        "csv", data_files={"train": train_path, "validation": eval_path}
+    )
+    event_names = sorted(dataset["train"].unique("event_type"))
+    label2id = {event_name: i for i, event_name in enumerate(event_names)}
+    logger.info(f"Docee class labels: {pformat(label2id)}")
+    dataset = dataset.cast_column(
+        "event_type", ClassLabel(num_classes=len(event_names), names=event_names)
+    )
+
+    setup_docee_split = partial(
+        setup_dataset_split,
+        dataset=dataset,
+        preprocessing=partial(preprocess_docee, tokenizer=tokenizer, max_input_length=max_input_length),
+    )
+    docee_train = setup_docee_split(split="train", n_examples=train_size)
+    docee_eval = setup_docee_split(split="validation", n_examples=eval_size)
+
+    return docee_train, docee_eval
 
 
 def subsample_one_per_source(df: pd.DataFrame) -> pd.DataFrame:
@@ -200,3 +303,12 @@ def deduplicate(
     df.to_csv(dataset_path, index_label=new_index_name)
 
     write_out(f"Deduplication complete.")
+
+
+# TODO:
+#   run_multitask_learning.py
+#   run_multitask_learning.sh
+#   wandb integration
+#   smarter stepping (not every epoch)
+#   loss weighing
+#   independent evaluation (summarization or classification)
