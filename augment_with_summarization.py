@@ -4,6 +4,7 @@ from pprint import pformat
 import os
 
 import pandas as pd
+import yaml
 from tqdm import tqdm
 from transformers import AutoTokenizer, pipeline, set_seed, enable_full_determinism
 from transformers.utils import PaddingStrategy
@@ -107,9 +108,8 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--num_beams",
         type=int,
-        default=4,
-        help="Number of beams to use for beam search. Defaults to 4."
-             "Setting this value to 1 means no beam search."
+        default=1,
+        help="Number of beams to use for beam search. Defaults to 1, which means no beam search"
     )
 
     parser.add_argument(
@@ -143,9 +143,10 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--num_return_sequences",
         type=int,
-        default=1,
+        default=3,
         help="Number of sequences to return for each source document which is summarized. "
-        "Note that this option doesn't make sense unless `do_sample` is also set. Defaults to 1."
+        "Note that this option doesn't make sense unless `do_sample` is also set. "
+             "Defaults to 3."
         )
 
     parser.add_argument(
@@ -153,6 +154,22 @@ def get_parser() -> argparse.ArgumentParser:
         type=float,
         default=0,
         help="Alpha for contrastive search. Defaults to 0 (turned off)"
+    )
+
+    parser.add_argument(
+        "--tokenizer_path",
+        type=str,
+        default=None,
+        help="Tokenizer path, if not the same as `pretrained_model_name_or_path`"
+    )
+
+    parser.add_argument(
+        "--model_max_length",
+        type=int,
+        default=1024,
+        help="Maximum length of input sequence that the model will take."
+             "Inputs longer than this value will be truncated."
+             "Defaults to 512."
     )
 
 
@@ -182,9 +199,10 @@ def main():
     # df has "id" column
 
     tokenizer = AutoTokenizer.from_pretrained(
-        args.pretrained_model_name_or_path,
-        padding=PaddingStrategy.MAX_LENGTH,
-        use_fast=True
+        args.tokenizer_path or args.pretrained_model_name_or_path,
+        padding=PaddingStrategy.LONGEST,
+        use_fast=True,
+        model_max_length=args.model_max_length
     )
     summarizer = pipeline(
         "summarization",
@@ -325,9 +343,6 @@ def main():
         #   top-p
         #   contrastive_search
         #
-        # TODO - implement generation of multiple sequences at once
-        # TODO - figure out what is the best way to save the generated summaries
-        # TODO - add source document ID for each summary
 
     ]
 
@@ -350,7 +365,14 @@ def main():
 
     # TODO - save hyperparameter info, or do dataset versioning via W&B
 
-    df_to_save.to_csv(args.output_path, index_label="id")
+    os.makedirs(os.path.dirname(args.output_path), exist_ok=True)
+
+    hyperparam_output_path = f"{args.output_path}.hyperparams.yaml"
+    with open(hyperparam_output_path, "w") as f:
+        yaml.safe_dump(vars(args), f)
+        logger.info(f"Hyperparameters saved to: {os.path.abspath(hyperparam_output_path)}")
+
+    df_to_save.to_csv(args.output_path, index_label="id", escapechar="\\")
     logger.info(f"Successfully saved resulting dataset at path  {os.path.abspath(args.output_path)}")
 
 
