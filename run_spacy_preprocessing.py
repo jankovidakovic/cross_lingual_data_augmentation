@@ -46,6 +46,7 @@ def get_parser():
         required=False,
         default=25,
         help="Number of leadning sentences to retain. Defaults to 25."
+             " If `prepend_title` is set, a title counts as (at least) one sentence."
     )
     parser.add_argument(
         "--prepend_title",
@@ -87,15 +88,15 @@ def main():
     columns_to_yield_from = ["text"]
     if args.prepend_title:
         columns_to_yield_from = ["title"] + columns_to_yield_from
-    text_it = yield_columns(df, columns_to_yield_from, concat=". ".join)
+    text_it = yield_columns(df, columns_to_yield_from)
     tokens = [
         list(tokens) for tokens in tqdm(pipeline(texts=text_it), desc="Preprocessing", total=len(df))
     ]
 
     logger.info(f"Preprocessing finished.")
-    new_df = df.loc[:, ["event_type"]]
+    new_df = df.loc[:, :]  # keep all columns, just in case
     new_df["tokens"] = tokens
-    new_df.to_csv(args.output_path)
+    new_df.to_csv(args.output_path, index=False)  # index is saved using "id"
 
 
 if __name__ == '__main__':
