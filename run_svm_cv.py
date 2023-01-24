@@ -131,7 +131,7 @@ def main():
 
         logger.info(f"Amount of source documents is {len(df_noaug)}")
         logger.info(
-            f"Amount of augmented documents before subsampling is {len(df_noaug)}"
+            f"Amount of augmented documents before subsampling is {len(df_aug)}"
         )
         logger.info(
             f"Subsampling will be done using {args.subsample_strategy} strategy."
