@@ -171,7 +171,7 @@ def main():
 
         logging.info(f"Saving scores to {args.save_scores_to}")
 
-        os.makedirs(args.save_scores_to, exist_ok=True)
+        os.makedirs(os.path.dirname(args.save_scores_to), exist_ok=True)
 
         # convert np arrays to lists
         for key in scores:
