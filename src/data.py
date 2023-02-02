@@ -57,7 +57,6 @@ class Docee(Dataset):
         df: pd.DataFrame,
         tokenizer: PreTrainedTokenizer,
         label2id: Optional[dict[str, int]] = None,
-        return_tensors: str = "pt",
         use_title: bool = False,
         concat: Optional[Callable[[Iterable[str]], str]] = None,
         *args,
@@ -83,7 +82,6 @@ class Docee(Dataset):
 
         self.length = len(self.examples)
 
-        self.return_tensors = return_tensors
         # TODO - don't pass tokenizer, simply pass a partially applied encoding function
 
     def __len__(self):
@@ -96,8 +94,7 @@ class Docee(Dataset):
         # tokenize the example to obtain the batch encoding
         batch_encoding = self.tokenizer(
             text=example,
-            truncation=True,
-            return_tensors=self.return_tensors
+            truncation=True
         )
         label = self.label2id[self.labels.iloc[idx]]
 
