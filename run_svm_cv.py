@@ -3,7 +3,6 @@ from ast import literal_eval
 import logging
 import os
 from pprint import pformat
-from typing import Callable
 
 import pandas as pd
 import numpy as np
@@ -77,6 +76,14 @@ def get_parser():
         help="Subsampling strategy used to subsample the augmented part of the dataset. "
         "Defaults to `all`, which equals no subsampling.",
     )
+
+    parser.add_argument(
+        "--random_state",
+        type=int,
+        default=18091999,
+        help="Random state. Will be used for both the SVM model and for shuffling data. Defaults to 18091999."
+    )
+
     return parser
 
 
@@ -106,12 +113,13 @@ def main():
             ngram_range=(1, 3),
             lowercase=args.lowercase,
         ),
-        LinearSVC(),
+        LinearSVC(random_state=args.random_state),
         verbose=True,
     )
 
     if args.is_augmented:
         subsampler: Callable[[pd.DataFrame], pd.DataFrame]
+        # TODO - fix random_state for subsampling strategies
         if args.subsample_strategy == "all":
             subsampler = identity
         elif args.subsample_strategy == "one_per_source":
@@ -152,9 +160,9 @@ def main():
         df.tokens.values,
         df.event_type.values,
         scoring="f1_macro",
-        cv=custom_kfold(n_splits=args.num_folds, df=df)
-        if args.is_augmented
-        else StratifiedKFold(n_splits=args.num_folds),
+        cv=custom_kfold(n_splits=args.num_folds, df=df, random_state=args.random_state)
+            if args.is_augmented
+            else StratifiedKFold(n_splits=args.num_folds, shuffle=True, random_state=args.random_state),
         verbose=2,
         n_jobs=args.n_jobs,
     )

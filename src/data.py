@@ -257,18 +257,19 @@ def subsample_unique_text(df: pd.DataFrame) -> pd.DataFrame:
     return df.groupby("text").sample(1)
 
 
-def custom_kfold(n_splits: int, df: pd.DataFrame):
-    df_noaug = df.loc[df.source_doc_id.isna(), :]
-    df_aug = df.loc[~df.source_doc_id.isna(), :]
+def custom_kfold(n_splits: int, df: pd.DataFrame, random_state: int):
+    df_noaug = df.loc[df.source_doc_id.isna(), :]  # correct
+    df_aug = df.loc[~df.source_doc_id.isna(), :]  # also correct
 
     # data leakage!!
     #   if test ste only comes from noaug, then the train set
     #   must not contain summaries for which source document is in test set
 
-    skf = StratifiedKFold(n_splits, shuffle=True)
+    skf = StratifiedKFold(n_splits, shuffle=True, random_state=random_state)  # bruheus
     for train_idx, test_idx in skf.split(df_noaug.tokens, df_noaug.event_type):
         # extract ids from test_idx
-        test_ids = df_noaug.iloc[test_idx]["id"]
+        # test_ids = df_noaug.iloc[test_idx]["id"]
+        test_ids = df_noaug.id.iloc[test_idx]
 
         # from df_aug, take only examples not sourced from test dataset
         df_aug_notfromtest = df_aug.loc[~df_aug.source_doc_id.isin(test_ids), :]
