@@ -10,6 +10,7 @@ from transformers.utils import PaddingStrategy
 import wandb
 from transformers import TrainingArguments, IntervalStrategy, Trainer, DataCollatorWithPadding
 
+from src.data import Docee
 from src.utils import multiclass_cls_metrics
 from src.parsers.run_finetuning_parser import get_parser
 from src.constants import MODEL_CLASSES, DATASET_INITS
@@ -92,13 +93,17 @@ if __name__ == '__main__':
             f"Dev filename provided ('{args.dev_filename}') not found.")
 
     # create dataset from train filename
-    dataset_init = DATASET_INITS[args.dataset_type]
+    # dataset_init = DATASET_INITS[args.dataset_type]
 
     train_df = pd.read_csv(args.train_filename)
     logging.info(f"Loaded {len(train_df)} train examples.")
     logging.info(f"Train examples: {pformat(train_df.head())}")
     # TODO - fix optional in callable
-    train_dataset = dataset_init(train_df, tokenizer, None)
+    train_dataset = Docee(
+        df=train_df,
+        tokenizer=tokenizer,
+        use_title=args.use_title
+    )
     logging.info(f"Labels mapped to IDs: {pformat(train_dataset.label2id)}")
     # create dev dataset if provided
     # create dataset from dev filename
@@ -106,7 +111,12 @@ if __name__ == '__main__':
     logging.info(f"Loaded {len(dev_df)} dev examples.")
     logging.info(f"Dev examples: {pformat(dev_df.head())}")
     # TODO - fix static typing
-    dev_dataset = dataset_init(dev_df, tokenizer, train_dataset.label2id)
+    dev_dataset = Docee(
+        df=dev_df,
+        tokenizer=tokenizer,
+        label2id=train_dataset.label2id,
+        use_title=args.use_title
+    )
 
     # setup config and model
     logging.info(f"Using model type: {args.model_type}")
@@ -161,7 +171,7 @@ if __name__ == '__main__':
     )
     data_collator = DataCollatorWithPadding(
         tokenizer=tokenizer,
-        padding=PaddingStrategy.MAX_LENGTH,
+        padding=PaddingStrategy.LONGEST,
         max_length=args.max_seq_length,
         return_tensors="pt"
     )  # I guess we pad here then

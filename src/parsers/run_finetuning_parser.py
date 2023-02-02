@@ -32,6 +32,14 @@ def get_parser():
              "be set using the '--label_column' option.",
     )
     parser.add_argument(
+        "--use_title",
+        action="store_true",
+        default=False,
+        help="If provided with this flag, the column 'title' will be used as additional input text for classification."
+             "Title will be prepended to text (as a first sentence of the article)."
+    )
+
+    parser.add_argument(
         "--dataset_type",
         type=str,
         required=True,

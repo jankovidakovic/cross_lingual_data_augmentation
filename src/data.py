@@ -58,24 +58,31 @@ class Docee(Dataset):
         tokenizer: PreTrainedTokenizer,
         label2id: Optional[dict[str, int]] = None,
         return_tensors: str = "pt",
+        use_title: bool = False,
+        concat: Optional[Callable[[Iterable[str]], str]] = None,
         *args,
         **kwargs,
     ):
         super().__init__()
         self.tokenizer: PreTrainedTokenizer = tokenizer
-        self.text: list[str] = df.text.tolist()
-        self.labels: list[str] = df.event_type.tolist()
+
+        self.concat = concat or concat_dot_join
+
+        columns = ["text"]
+        if use_title:
+            columns = ["title"] + columns
 
         # map labels to IDs
-        self.label2id: dict[str, int] = label2id or {
-            label: i for i, label in enumerate(sorted(df.event_type.unique().tolist()))
-        }
-        self.length = len(self.text)
 
-        self.fields = [
-            "text",
-            "labels",
-        ]  # shouldn't this be label?  # where is this even used
+        self.examples = df.loc[:, columns]
+        self.labels = df.loc[:, "event_type"]
+
+        self.label2id: dict[str, int] = label2id or {
+            label: i for i, label in enumerate(sorted(self.labels.unique().tolist()))
+        }
+
+        self.length = len(self.examples)
+
         self.return_tensors = return_tensors
         # TODO - don't pass tokenizer, simply pass a partially applied encoding function
 
@@ -83,20 +90,17 @@ class Docee(Dataset):
         return self.length
 
     def __getitem__(self, idx: int):
-        # realnetworks does:
-        #   1. get relevant data (by index)
-        #   2. tokenize stuff (returning PyTorch tensors)
-        #   3. return stuff as tuple (along with current label)
-        #
-        #   BUT i don't think we want to do it that way
-        #       because we will have different ways of loading the stuff
-        #       and for that, we need different dataloaders, right?
-        #   altho, that's not a priority for now, we could just hardcode it here
+        # create the example that optionally includes the title
+        example = self.concat(self.examples.iloc[idx])
 
+        # tokenize the example to obtain the batch encoding
         batch_encoding = self.tokenizer(
-            text=self.text[idx], truncation=True, return_tensors=self.return_tensors
+            text=example,
+            truncation=True,
+            return_tensors=self.return_tensors
         )
-        label = self.label2id[self.labels[idx]]
+        label = self.label2id[self.labels.iloc[idx]]
+
         batch_encoding["labels"] = label
         return batch_encoding
         # return self.text[idx], self.labels[idx]
