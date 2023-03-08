@@ -117,6 +117,12 @@ def get_parser() -> ArgumentParser:
         help="If set, logging level is set to INFO. Else, it's set to WARN."
     )
 
+    parser.add_argument(
+        "--use_title",
+        action="store_true",
+        help="If set, title will be prepended to DocEE examples during inference."
+    )
+
     return parser
 
 
@@ -186,7 +192,7 @@ def main():
         for i, label in enumerate(label_names)
     }
 
-    dataset = DoceeForInference(df)
+    dataset = DoceeForInference(df, use_title=args.use_title)
 
     y_pred = np.array([
         int(out["label"].split("_")[1])
